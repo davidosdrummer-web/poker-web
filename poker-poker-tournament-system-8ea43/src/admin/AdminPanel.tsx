@@ -32,9 +32,21 @@ export function AdminPanel() {
 
   /* роль определяется аккаунтом */
   useEffect(() => {
-    if (user && s.settings.role !== user.role) actions.setRole(user.role);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.role]);
+  if (user) {
+    console.log('user.role:', user.role);
+    // Если роль пользователя не совпадает с сохранённой, обновляем
+    if (s.settings.role !== user.role) {
+      actions.setRole(user.role);
+    }
+    // Временно: если пользователь имеет админский email, принудительно ставим admin
+    // (замените на ваш email)
+    if (user.username === 'admin@poker.com' && user.role !== 'admin') {
+      // Чтобы обновить роль в БД, нужно вызвать setUserRole
+      // Но у нас нет прямого доступа из компонента – сделаем через auth
+      // Но проще вручную исправить в Firebase Console
+    }
+  }
+}, [user?.id, user?.role]);
 
   /* clock */
   useEffect(() => {

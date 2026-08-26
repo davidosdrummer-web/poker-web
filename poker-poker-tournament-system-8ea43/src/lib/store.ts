@@ -20,6 +20,8 @@ import { blindLevels, defaultBonuses, seedState } from './data';
 import { autoSeatPlan, balanceSuggestions, entryPoints, fmtChips, fmtInt, fullName, leaderboardRows, liveStats, uid, type AutoSeatMode, type Suggestion } from './utils';
 // Импортируем Firebase
 import { db, getUserId, ref, set, get, onValue, off } from './firebase';
+// Импортируем currentRole для получения роли из аутентификации
+import { currentRole } from './auth';
 
 // ---------- Константы и нормализация ----------
 const DEFAULTS = seedState();
@@ -141,6 +143,15 @@ function initFirebaseSync() {
     const remote = snapshot.val();
     if (remote && remote.rev > state.rev) {
       state = normalize(remote);
+      // Принудительно устанавливаем роль из auth
+      const userRole = currentRole();
+      if (userRole && state.settings.role !== userRole) {
+        state.settings.role = userRole;
+        // Увеличиваем rev, чтобы сохранить изменения
+        state.rev += 1;
+        // Сохраняем обновленное состояние
+        persist(true);
+      }
       emit(); // Оповещаем React
     }
   });
@@ -149,9 +160,20 @@ function initFirebaseSync() {
 // ---------- Инициализация хранилища ----------
 export async function initStore() {
   const loaded = await loadFromFirebase();
+  // Принудительно устанавливаем роль из auth, чтобы перезаписать сохранённую роль
+  const userRole = currentRole();
+  if (userRole) {
+    loaded.settings.role = userRole;
+  }
   state = loaded;
   emit();
   initFirebaseSync();
+  // Если роль была применена, сохраняем состояние с новой ролью
+  if (userRole && state.settings.role === userRole) {
+    // Увеличиваем rev, чтобы состояние сохранилось
+    state.rev += 1;
+    persist(true);
+  }
 }
 
 // ---------- Геттеры и хук ----------
@@ -178,9 +200,6 @@ export function can(perm: Perm): boolean {
   const role = currentRole() ?? state.settings.role;
   return ROLE_PERMS[role].includes(perm);
 }
-
-// Импортируем currentRole из auth (оставим как есть)
-import { currentRole } from './auth';
 
 // ---------- Ядро: коммит изменений ----------
 function commit(mutator: (draft: AppState) => void): boolean {

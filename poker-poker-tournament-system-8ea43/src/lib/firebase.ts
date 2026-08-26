@@ -18,18 +18,16 @@ import {
 } from 'firebase/auth';
 
 // ‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐
-// 1. Конфигурация Firebase (скопируйте из консоли)
+// 1. Конфигурация Firebase (использует переменные окружения)
 // ‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐
 const firebaseConfig = {
-  apiKey: "AIzaSyCVy9as-EW_lQXIbZdQAcQSqEyKJ1lUpGI",
-  authDomain: "pokerbasa-23592.firebaseapp.com",
-  databaseURL: "https://pokerbasa-23592-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "pokerbasa-23592",
-  storageBucket: "pokerbasa-23592.firebasestorage.app",
-  messagingSenderId: "802680795601",
-  appId: "1:802680795601:web:0460fd0a33e20fa39830f0",
-  // measurementId не обязателен для работы, его можно добавить, но он не используется в коде
-  // measurementId: "G-R4MMYKJJ3M"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
