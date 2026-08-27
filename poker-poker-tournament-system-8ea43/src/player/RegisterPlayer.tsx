@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Btn, Field, Icon, ToastHost, toast } from '../components/ui';
 import { auth } from '../lib/auth';
-import { useApp } from '../lib/store';
+import { useApp, actions, initStore, getState } from '../lib/store';
 import { makeT } from '../lib/i18n';
-import { actions } from '../lib/store';
 
 export function RegisterPlayer() {
   const s = useApp();
@@ -28,6 +27,7 @@ export function RegisterPlayer() {
     }
 
     try {
+      // 1. Регистрируем пользователя в Firebase Auth
       const result = await auth.register(email, password, 'player', true);
       if (!result.ok) {
         setError(t(result.error));
@@ -35,8 +35,8 @@ export function RegisterPlayer() {
         return;
       }
 
-      // Добавляем игрока в базу
-      actions.addPlayer({
+      // 2. Добавляем игрока в базу клуба
+      const playerId = actions.addPlayer({
         firstName,
         lastName,
         nickname: nickname || `${firstName} ${lastName}`,
@@ -47,9 +47,17 @@ export function RegisterPlayer() {
         userId: result.user.id,
       });
 
+      // 3. Принудительно перезагружаем данные из Firebase
+      await initStore();
+
+      // 4. Проверяем, что игрок появился
+      const state = getState();
+      console.log('Игроки после регистрации:', state.players);
+
       toast('Регистрация успешна!');
       setLoading(false);
-      // Перенаправляем в ЛК игрока через изменение URL
+      
+      // 5. Перенаправляем в ЛК игрока
       window.location.hash = '#/player';
     } catch (err: any) {
       setError(err.message || 'Ошибка регистрации');
