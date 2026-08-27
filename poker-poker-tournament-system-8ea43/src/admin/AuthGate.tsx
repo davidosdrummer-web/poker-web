@@ -62,6 +62,12 @@ export function AuthGate() {
             <Btn variant="gold" size="lg" icon="play" onClick={submit}>
               {t('auth.loginBtn')}
             </Btn>
+            <div className="text-center text-xs text-cream-500 mt-3">
+              Нет аккаунта?{' '}
+              <button onClick={() => window.location.hash = '/register'} className="text-gold-300 hover:text-gold-200 font-semibold">
+                Зарегистрироваться
+              </button>
+            </div>
           </div>
         </div>
       </div>

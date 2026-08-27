@@ -342,9 +342,9 @@ export const actions = {
     return commit((d) => { d.settings.screens = { ...d.settings.screens, ...patch }; });
   },
 
-  addPlayer(data: { firstName: string; lastName: string; nickname: string; phone: string; avatarColor: string | null; avatarData?: string | null; joinedAt?: number; basePoints?: number; userId?: string | null; notes?: string }): string {
+  addPlayer(data: { firstName: string; lastName: string; nickname: string; phone: string; avatarColor: string | null; avatarData?: string | null; joinedAt?: number; basePoints?: number; userId?: string | null; notes?: string }, allowSelfRegistration = false): string {
     const id = uid();
-    if (!can('players')) return id;
+    if (!can('players') && !allowSelfRegistration) return id;
     commit((d) => {
       d.players.push({
         id,
