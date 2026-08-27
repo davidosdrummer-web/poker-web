@@ -44,6 +44,7 @@ export function RegisterPlayer() {
         joinedAt: Date.now(),
         basePoints: 0,
         userId: result.user.id,
+        status: 'active',
       }, true);
 
       toast('Регистрация успешна!');

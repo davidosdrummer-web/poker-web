@@ -168,7 +168,7 @@ type Perm = 'players' | 'structure' | 'live' | 'club';
 const ROLE_PERMS: Record<Role, Perm[]> = {
   admin: ['players', 'structure', 'live', 'club'],
   operator: ['live'],
-  player: [],
+  player: ['live'],
 };
 
 export function can(perm: Perm): boolean {
