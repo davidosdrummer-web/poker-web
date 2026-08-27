@@ -62,7 +62,6 @@ export function defaultBonuses(): TournamentBonus[] {
   ];
 }
 
-/** боевой режим: чистая база клуба */
 export function seedState(): AppState {
   return {
     rev: 1,

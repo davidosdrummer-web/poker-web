@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import type { Tournament } from '../lib/types';
-import { actions, can, getActiveTournament, rebuyClosed, regClosed, remainingSeconds, useApp } from '../lib/store';
+import { actions, can, getActiveTournament, rebuyClosed, regClosed, remainingSeconds, useApp, getState } from '../lib/store';
 import { makeT } from '../lib/i18n';
-import { entryPoints, fmtChips, fmtClock, fmtInt, fmtTimeOfDay, fullName, liveStats } from '../lib/utils';
+import { entryPoints, fmtChips, fmtClock, fmtInt, fmtTimeOfDay, fullName, liveStats, freeSeats } from '../lib/utils';
 import { playSfx } from '../lib/sfx';
 import { Badge, Btn, EmptyState, Field, Icon, KeyCap, Modal, toast } from '../components/ui';
 
@@ -23,7 +23,6 @@ export function LiveTab({ onOpenEditor }: { onOpenEditor: (tournamentId: string,
     return () => window.clearInterval(id);
   }, []);
 
-  /* E — quick eliminate while on this tab */
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
@@ -74,7 +73,7 @@ function MissionControl({ tor, breakMin, setBreakMin, onElim, onRebuy, onBonus, 
   const s = useApp();
   const t = makeT(s.settings.language);
   const remaining = remainingSeconds(s, tor);
-  const stats = useMemo(() => liveStats(tor), [tor]);
+  const stats = useMemo(() => liveStats(tor), [tor, s.rev]);
   const allowed = can('live');
   const st = tor.status;
   const level = tor.levels[tor.levelIndex];
@@ -271,7 +270,7 @@ function MiniStat({ label, value, sub, icon, accent }: { label: string; value: s
   );
 }
 
-/* ---------------- modals ---------------- */
+/* ---------------- EliminateModal ---------------- */
 
 export function EliminateModal({ tor, onClose }: { tor: Tournament; onClose: () => void }) {
   const s = useApp();
@@ -315,6 +314,8 @@ export function EliminateModal({ tor, onClose }: { tor: Tournament; onClose: () 
   );
 }
 
+/* ---------------- RebuyModal ---------------- */
+
 export function RebuyModal({ tor, onClose }: { tor: Tournament; onClose: () => void }) {
   const s = useApp();
   const t = makeT(s.settings.language);
@@ -327,6 +328,57 @@ export function RebuyModal({ tor, onClose }: { tor: Tournament; onClose: () => v
     const p = s.players.find((x) => x.id === id);
     return p ? fullName(p) : '—';
   };
+
+  const getReturnInfo = (playerId: string): { tableName: string; seat: number | null } => {
+    const entry = tor.entries.find(x => x.playerId === playerId);
+    if (!entry) return { tableName: '—', seat: null };
+    if (entry.eliminated) {
+      if (entry.lastTableId && entry.lastSeat) {
+        const table = tor.tables.find(x => x.id === entry.lastTableId);
+        if (table) return { tableName: table.name, seat: entry.lastSeat };
+      }
+      const free = freeSeats(tor);
+      if (free.length > 0) {
+        const pick = free[0];
+        const table = tor.tables.find(x => x.id === pick.tableId);
+        if (table) return { tableName: table.name, seat: pick.seat };
+      }
+    }
+    return { tableName: '—', seat: null };
+  };
+
+  const handleRebuy = (kind: 'rebuy' | 'addon' | 'reentry') => {
+    const entry = tor.entries.find(x => x.playerId === pid);
+    if (!entry) return;
+    const info = getReturnInfo(pid);
+    const isReturn = entry.eliminated;
+    let chips = 0;
+    let label = '';
+    if (kind === 'reentry') {
+      chips = tor.reentryChips;
+      label = t('reentry');
+      actions.reentry(tor.id, pid);
+      playSfx('reentry', s.settings.sfx);
+    } else if (kind === 'rebuy') {
+      chips = tor.rebuyChips;
+      label = `${t('rebuy')} ${entry.rebuys + 1}`;
+      actions.rebuyStack(tor.id, pid, 'rebuy');
+      playSfx('rebuy', s.settings.sfx);
+    } else {
+      chips = tor.addonChips;
+      label = `${t('addon')} ${entry.addons + 1}`;
+      actions.rebuyStack(tor.id, pid, 'addon');
+      playSfx('addon', s.settings.sfx);
+    }
+    if (isReturn) {
+      const seatText = info.seat ? `, ${t('seatNumber').replace('{seat}', String(info.seat))}` : '';
+      toast(`${nameOf(pid)} ${t('returns')}!\n${label} +${fmtChips(chips)} фишек\n${t('table')} ${info.tableName}${seatText}`, 'ok');
+    } else {
+      toast(`${nameOf(pid)} — ${label} · +${fmtChips(chips)} фишек`, 'ok');
+    }
+    onClose();
+  };
+
   return (
     <Modal title={t('rebuyAdd')} onClose={onClose} footer={<Btn variant="ghost" onClick={onClose}>{t('close')}</Btn>}>
       <p className="text-xs text-cream-500 mb-3">{t('rebuyHint')}</p>
@@ -360,16 +412,16 @@ export function RebuyModal({ tor, onClose }: { tor: Tournament; onClose: () => v
           </div>
           {entry.eliminated && <div className="mt-2 text-[11px] text-gold-300 font-semibold flex items-center gap-1.5"><Icon name="info" size={12} /> {t('rebuyWindowHint')}</div>}
           <div className="grid grid-cols-3 gap-2 mt-3">
-            <button disabled={closed} onClick={() => { actions.rebuyStack(tor.id, pid, 'rebuy'); playSfx('rebuy', s.settings.sfx); toast(`${t('rebuy')} ${entry.rebuys + 1} · +${fmtChips(tor.rebuyChips)}${entry.eliminated ? ` · ${t('comeback')}` : ''}`); }} className="rounded-lg border border-gold-400/40 bg-gold-400/12 hover:bg-gold-400/20 disabled:opacity-35 disabled:pointer-events-none px-2 py-2 text-center transition-colors">
-              <span className="block text-sm font-bold text-gold-300">{t('rebuy')} {entry.rebuys + 1}</span>
+            <button disabled={closed} onClick={() => handleRebuy('rebuy')} className="rounded-lg border border-gold-400/40 bg-gold-400/12 hover:bg-gold-400/20 disabled:opacity-35 disabled:pointer-events-none px-2 py-2 text-center transition-colors">
+              <span className="block text-sm font-bold text-gold-300">{t('rebuy')}</span>
               <span className="block text-[10px] num text-cream-500 font-semibold">+{fmtChips(tor.rebuyChips)}</span>
             </button>
-            <button disabled={closed} onClick={() => { actions.reentry(tor.id, pid); playSfx('reentry', s.settings.sfx); toast(`${t('reentry')} · +${fmtChips(tor.reentryChips)} · ${t('comeback')}`); }} className="rounded-lg border border-win/35 bg-win/10 hover:bg-win/20 disabled:opacity-35 disabled:pointer-events-none px-2 py-2 text-center transition-colors" title={t('reentryDesc')}>
+            <button disabled={closed} onClick={() => handleRebuy('reentry')} className="rounded-lg border border-win/35 bg-win/10 hover:bg-win/20 disabled:opacity-35 disabled:pointer-events-none px-2 py-2 text-center transition-colors" title={t('reentryDesc')}>
               <span className="block text-sm font-bold text-win">{t('reentry')}</span>
               <span className="block text-[10px] num text-cream-500 font-semibold">+{fmtChips(tor.reentryChips)}</span>
             </button>
-            <button disabled={closed} onClick={() => { actions.rebuyStack(tor.id, pid, 'addon'); playSfx('addon', s.settings.sfx); toast(`${t('addon')} ${entry.addons + 1} · +${fmtChips(tor.addonChips)}${entry.eliminated ? ` · ${t('comeback')}` : ''}`); }} className="rounded-lg border border-line bg-felt-800 hover:bg-felt-750 disabled:opacity-35 disabled:pointer-events-none px-2 py-2 text-center transition-colors">
-              <span className="block text-sm font-bold text-cream-100">{t('addon')} {entry.addons + 1}</span>
+            <button disabled={closed} onClick={() => handleRebuy('addon')} className="rounded-lg border border-line bg-felt-800 hover:bg-felt-750 disabled:opacity-35 disabled:pointer-events-none px-2 py-2 text-center transition-colors">
+              <span className="block text-sm font-bold text-cream-100">{t('addon')}</span>
               <span className="block text-[10px] num text-cream-500 font-semibold">+{fmtChips(tor.addonChips)}</span>
             </button>
           </div>
@@ -379,7 +431,7 @@ export function RebuyModal({ tor, onClose }: { tor: Tournament; onClose: () => v
   );
 }
 
-/* ---------------- windows strip / comeback / bonus ---------------- */
+/* ---------------- WindowsStrip ---------------- */
 
 function WindowsStrip({ tor }: { tor: Tournament }) {
   const s = useApp();
@@ -411,6 +463,8 @@ function WindowsStrip({ tor }: { tor: Tournament }) {
   );
 }
 
+/* ---------------- ComebackPanel ---------------- */
+
 function ComebackPanel({ tor }: { tor: Tournament }) {
   const s = useApp();
   const t = makeT(s.settings.language);
@@ -421,6 +475,49 @@ function ComebackPanel({ tor }: { tor: Tournament }) {
     const p = s.players.find((x) => x.id === id);
     return p ? fullName(p) : '—';
   };
+
+  const getReturnInfo = (playerId: string): { tableName: string; seat: number | null } => {
+    const entry = tor.entries.find(x => x.playerId === playerId);
+    if (!entry) return { tableName: '—', seat: null };
+    if (entry.eliminated) {
+      if (entry.lastTableId && entry.lastSeat) {
+        const table = tor.tables.find(x => x.id === entry.lastTableId);
+        if (table) return { tableName: table.name, seat: entry.lastSeat };
+      }
+      const free = freeSeats(tor);
+      if (free.length > 0) {
+        const pick = free[0];
+        const table = tor.tables.find(x => x.id === pick.tableId);
+        if (table) return { tableName: table.name, seat: pick.seat };
+      }
+    }
+    return { tableName: '—', seat: null };
+  };
+
+  const handleRebuy = (e: Tournament['entries'][number], kind: 'rebuy' | 'addon' | 'reentry') => {
+    const info = getReturnInfo(e.playerId);
+    let chips = 0;
+    let label = '';
+    if (kind === 'reentry') {
+      chips = tor.reentryChips;
+      label = t('reentry');
+      actions.reentry(tor.id, e.playerId);
+      playSfx('reentry', s.settings.sfx);
+    } else if (kind === 'rebuy') {
+      chips = tor.rebuyChips;
+      label = `${t('rebuy')} ${e.rebuys + 1}`;
+      actions.rebuyStack(tor.id, e.playerId, 'rebuy');
+      playSfx('rebuy', s.settings.sfx);
+    } else {
+      chips = tor.addonChips;
+      label = `${t('addon')} ${e.addons + 1}`;
+      actions.rebuyStack(tor.id, e.playerId, 'addon');
+      playSfx('addon', s.settings.sfx);
+    }
+    const seatText = info.seat ? `, ${t('seatNumber').replace('{seat}', String(info.seat))}` : '';
+    toast(`${nameOf(e.playerId)} ${t('returns')}!\n${label} +${fmtChips(chips)} фишек\n${t('table')} ${info.tableName}${seatText}`, 'ok');
+  };
+
   return (
     <div className="col-span-12 card p-5">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -436,13 +533,13 @@ function ComebackPanel({ tor }: { tor: Tournament }) {
             {e.eliminatedBy && <span className="text-[11px] text-cream-700 truncate max-w-[140px]">← {nameOf(e.eliminatedBy)}</span>}
             <span className="text-[11px] num text-cream-500">{t('rebuysLbl')}: {e.rebuys} · {t('entriesShort')}: {e.entries}</span>
             <div className="flex gap-1.5">
-              <Btn size="sm" variant="gold" disabled={!allowed || closed} title={e.lastSeat ? `${t('table')} ${tor.tables.find((x) => x.id === e.lastTableId)?.name ?? ''} · ${t('seat')} ${e.lastSeat}` : undefined} onClick={() => { actions.rebuyStack(tor.id, e.playerId, 'rebuy'); playSfx('rebuy', s.settings.sfx); toast(`${nameOf(e.playerId)} · ${t('comeback')}`); }}>
+              <Btn size="sm" variant="gold" disabled={!allowed || closed} onClick={() => handleRebuy(e, 'rebuy')}>
                 {t('rebuy')}
               </Btn>
-              <Btn size="sm" variant="green" disabled={!allowed || closed} onClick={() => { actions.reentry(tor.id, e.playerId); playSfx('reentry', s.settings.sfx); toast(`${nameOf(e.playerId)} · ${t('reentry')}`); }}>
+              <Btn size="sm" variant="green" disabled={!allowed || closed} onClick={() => handleRebuy(e, 'reentry')}>
                 {t('reentry')}
               </Btn>
-              <Btn size="sm" variant="dark" icon="dice" disabled={!allowed || closed} title={t('rebuyRandom')} onClick={() => { actions.rebuyStack(tor.id, e.playerId, 'rebuy'); actions.seatRandom(tor.id, e.playerId); playSfx('rebuy', s.settings.sfx); toast(`${nameOf(e.playerId)} · ${t('seatRandomOne')}`); }}>
+              <Btn size="sm" variant="dark" icon="dice" disabled={!allowed || closed} title={t('rebuyRandom')} onClick={() => { handleRebuy(e, 'rebuy'); actions.seatRandom(tor.id, e.playerId); }}>
                 <span className="sr-only">{t('rebuyRandom')}</span>
               </Btn>
             </div>
@@ -452,6 +549,8 @@ function ComebackPanel({ tor }: { tor: Tournament }) {
     </div>
   );
 }
+
+/* ---------------- BonusModal ---------------- */
 
 function BonusModal({ tor, onClose }: { tor: Tournament; onClose: () => void }) {
   const s = useApp();
@@ -489,25 +588,16 @@ function BonusModal({ tor, onClose }: { tor: Tournament; onClose: () => void }) 
         <Field label={t('bonusReason')}>
           <div className="flex gap-1.5 flex-wrap">
             {tor.bonuses.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => { setSelId(b.id); setChips(b.chips); }}
-                className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-colors flex items-center gap-2 ${selId === b.id ? 'bg-felt-700 text-gold-300 border-gold-400/50' : 'border-line-soft text-cream-300 hover:border-felt-600'}`}
-              >
+              <button key={b.id} onClick={() => { setSelId(b.id); setChips(b.chips); }} className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-colors flex items-center gap-2 ${selId === b.id ? 'bg-felt-700 text-gold-300 border-gold-400/50' : 'border-line-soft text-cream-300 hover:border-felt-600'}`}>
                 <span>{b.name || t('bonusName')}</span>
                 <span className="num text-gold-400 font-bold">+{fmtChips(b.chips)}</span>
               </button>
             ))}
-            <button
-              onClick={() => setSelId('custom')}
-              className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-colors ${selId === 'custom' ? 'bg-felt-700 text-gold-300 border-gold-400/50' : 'border-line-soft text-cream-300 hover:border-felt-600'}`}
-            >
+            <button onClick={() => setSelId('custom')} className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-colors ${selId === 'custom' ? 'bg-felt-700 text-gold-300 border-gold-400/50' : 'border-line-soft text-cream-300 hover:border-felt-600'}`}>
               {t('reason.other')}
             </button>
           </div>
-          {selId === 'custom' && (
-            <input className="inp mt-2" placeholder={t('bonusCustom')} value={custom} onChange={(e) => setCustom(e.target.value)} autoFocus />
-          )}
+          {selId === 'custom' && <input className="inp mt-2" placeholder={t('bonusCustom')} value={custom} onChange={(e) => setCustom(e.target.value)} autoFocus />}
         </Field>
         <Field label={t('bonusChips')}>
           <div className="flex items-center gap-2">
@@ -525,6 +615,8 @@ function BonusModal({ tor, onClose }: { tor: Tournament; onClose: () => void }) 
     </Modal>
   );
 }
+
+/* ---------------- FinishModal ---------------- */
 
 export function FinishModal({ tor, onClose }: { tor: Tournament; onClose: () => void }) {
   const s = useApp();

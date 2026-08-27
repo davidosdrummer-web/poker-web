@@ -1,4 +1,3 @@
-// src/lib/i18n.ts
 import type { Lang } from './types';
 
 const ru: Record<string, string> = {
@@ -211,6 +210,8 @@ const ru: Record<string, string> = {
   'role.admin.desc': 'Полный доступ: база игроков, сетки очков, структура, сезоны, настройки',
   'role.operator.desc': 'Ведёт турнир: таймер, выбывания, рассадка, регистрация. Не редактирует базу игроков и сетки очков',
   'roleFromLogin': 'Роль определяется вашим аккаунтом',
+  'role.player': 'Игрок',
+  'role.player.desc': 'Просмотр рейтинга и своего профиля',
   'backup': 'Резервное копирование',
   'export': 'Экспорт базы',
   'import': 'Импорт базы',
@@ -273,7 +274,6 @@ const ru: Record<string, string> = {
   'showAll': 'Показать весь рейтинг',
   'levelOf': 'Уровень',
 
-  /* окна регистрации и докупок */
   'regWindow': 'Окно регистрации',
   'regCloses': 'Регистрация до',
   'regClosed': 'Регистрация закрыта',
@@ -293,7 +293,6 @@ const ru: Record<string, string> = {
   'comeback': 'Возвращение в игру',
   'entriesShort': 'вх.',
 
-  /* бонусы */
   'bonus': 'Бонус',
   'bonusTitle': 'Бонусные фишки',
   'bonusHint': 'Прибавьте участнику стек и укажите причину — бонус сразу попадает в его стек и учитывается в статистике.',
@@ -308,12 +307,10 @@ const ru: Record<string, string> = {
   'reason.birthday': 'День рождения',
   'reason.other': 'Другое',
 
-  /* сезоны */
   'seasonCreate': 'Новый сезон',
   'seasonEdit': 'Редактировать сезон',
   'seasonUpdated': 'Сезон обновлён',
 
-  /* фишки за докупки */
   'costs': 'Фишки за докупки',
   'rebuyCost': 'Фишек за ребай',
   'reentryCost': 'Фишек за ре-ентри',
@@ -325,11 +322,9 @@ const ru: Record<string, string> = {
   'seatRandomHint': 'Новые игроки садятся на случайные свободные места, не затрагивая уже рассаженных.',
   'rebuyRandom': 'Ребай на случайное место',
 
-  /* звуки */
   'sfxToggle': 'Звуковые эффекты событий',
   'sfxHint': 'Начало турнира, выбивание, уровень, перерыв, ребай, ре-ентри, адд-он, финал.',
 
-  /* дата и время старта */
   'startDate': 'Дата старта',
   'startTime': 'Время старта',
   'dateToday': 'Сегодня',
@@ -337,13 +332,11 @@ const ru: Record<string, string> = {
   'dateIn2': 'Через 2 дня',
   'dateIn7': 'Через неделю',
 
-  /* бонус нескольким игрокам */
   'choosePlayers': 'Выберите игроков',
   'bonusApply': 'Начислить бонус',
   'playersSelected': 'игроков выбрано',
   'seatDisabledLive': 'Турнир идёт — места зафиксированы. Доступна только досадка свободных игроков.',
 
-  /* очки за выбивание */
   'knockoutPoints': 'Очки за выбивание',
   'knockoutPointsEnable': 'Начислять очки за выбивание',
   'knockoutPointsHint': 'Очки начисляются выбившему игроку мгновенно и сразу видны в рейтинге клуба в режиме лайв.',
@@ -356,7 +349,6 @@ const ru: Record<string, string> = {
   'byStack': 'По фишкам',
   'eliminatedByShort': 'от',
 
-  /* раздел звуков */
   'sfxSection': 'Звуки',
   'sfxMaster': 'Звуковые эффекты событий',
   'sfxTest': 'Проиграть',
@@ -369,7 +361,6 @@ const ru: Record<string, string> = {
   'sfx.addon': 'Адд-он',
   'sfx.end': 'Окончание турнира',
 
-  /* шаблоны турниров */
   'templates': 'Шаблоны турниров',
   'saveTemplate': 'Сохранить шаблон',
   'templateName': 'Название шаблона',
@@ -379,22 +370,18 @@ const ru: Record<string, string> = {
   'noTemplates': 'Нет сохранённых шаблонов',
   'templatesHint': 'Шаблон хранит структуру блайндов, сетку очков, бонусы, фишки докупок, окна и настройки нокаутов.',
 
-  /* стартовые очки игрока */
   'startPoints': 'Стартовые очки клуба',
   'startPointsHint': 'Задаются один раз при создании игрока. Далее очки меняются только по итогам турниров.',
   'startPointsLocked': 'Стартовые очки зафиксированы при создании и не редактируются',
 
-  /* подтверждение случайного места */
   'seatResultTitle': 'Случайное место определено',
   'willSitAt': 'садится за',
 
-  /* очистка базы */
   'wipeData': 'Очистить базу',
   'wipeHint': 'Все игроки, турниры, сезоны и настройки будут удалены безвозвратно. Аккаунты доступа сохранятся.',
   'lockedShort': 'Фикс',
   'gameTypeLbl': 'Тип игры',
 
-  /* бонусы турнира */
   'bonusesSection': 'Бонусы',
   'bonusName': 'Наименование бонуса',
   'addBonus': 'Добавить бонус',
@@ -402,12 +389,10 @@ const ru: Record<string, string> = {
   'bonusesHint': 'Бонусы доступны на пульте во время игры: одно нажатие добавляет игроку фишки и записывает причину в его историю.',
   'noBonuses': 'Бонусы не настроены — добавьте хотя бы один.',
 
-  /* логотип */
   'logoUpload': 'Загрузить логотип',
   'logoRemove': 'Убрать логотип',
   'logoHint': 'Логотип отображается в шапке всех экранов зала и в панели управления.',
 
-  /* игроки: дата и аватар */
   'joinedAt': 'Дата регистрации в клубе',
   'avatarUpload': 'Загрузить фото',
   'avatarRemove': 'Убрать фото',
@@ -416,7 +401,6 @@ const ru: Record<string, string> = {
   'confirmDeleteP': 'Игрок будет удалён из базы клуба. История турниров сохранится без имени. Отменить действие нельзя.',
   'playerDeleted': 'Игрок удалён',
 
-  /* доступ и личный кабинет */
   'auth.signIn': 'Вход',
   'auth.signUp': 'Регистрация',
   'auth.username': 'Логин',
@@ -454,9 +438,61 @@ const ru: Record<string, string> = {
   'auth.cannotDeleteSelf': 'Нельзя удалить свой аккаунт',
   'auth.lastAdmin': 'Нельзя удалить последнего администратора',
 
-  /* live-экран: окно регистрации */
   'regLeft': 'до конца регистрации',
   'regUntil': 'Регистрация до',
+
+  'mobile.menu': 'Меню',
+  'mobile.control': 'Управление турниром',
+  'mobile.screens': 'Экраны',
+
+  'player.dashboard': 'Мой профиль',
+  'player.rating': 'Мой рейтинг',
+  'player.history': 'Мои турниры',
+  'player.register': 'Регистрация игрока',
+  'player.registerSuccess': 'Вы успешно зарегистрировались!',
+  'player.alreadyExists': 'Игрок с таким email уже существует',
+  'player.notFound': 'Игрок не найден',
+  'player.inviteCode': 'Код приглашения',
+  'player.linkAccount': 'Привязать аккаунт',
+  'player.linkSuccess': 'Аккаунт успешно привязан!',
+  'player.rank': 'Моё место в рейтинге',
+  'player.points': 'Мои очки',
+  'player.played': 'Сыграно турниров',
+  'player.wins': 'Побед',
+  'player.top3': 'Топ-3',
+  'player.best': 'Лучший результат',
+
+  'screen.return': 'Возвращение в игру!',
+  'screen.returnInfo': '{name} возвращается с {chips} фишек за стол {table}',
+  'returns': 'возвращается в игру',
+  'returned': 'вернулся в игру',
+  'returnToast': '{name} возвращается!\n{kind} +{chips} фишек\nСтол {table}{seat}',
+  'seatNumber': 'место {seat}',
+  'menu': 'Меню',
+  'notes': 'Заметки',
+  'notesSaved': 'Заметки сохранены',
+  'notesPlaceholder': 'Введите заметки об игроке...',
+  'noNotes': 'Заметки отсутствуют',
+  'clone': 'Копировать',
+  'cloneTournament': 'Копирование турнира',
+  'cloneHint': 'Создать копию турнира со всеми настройками. Новая дата – через 7 дней.',
+  'exportStructure': 'Экспорт структуры',
+  'importStructure': 'Импорт структуры',
+  'structureImported': 'Структура импортирована',
+  'invalidStructure': 'Неверный формат файла',
+  'tournamentCloned': 'Турнир скопирован',
+  'achievements': 'Достижения',
+  'thisYear': 'Этот год',
+  'thisMonth': 'Этот месяц',
+  'thisWeek': 'Эта неделя',
+  'ratingDynamics': 'Динамика рейтинга',
+  'tournamentNumber': 'Турнир №',
+  'pointsDistribution': 'Распределение очков',
+  'historyTable': 'История турниров',
+  'tournamentName': 'Название турнира',
+  'noData': 'Нет данных',
+  'knockouts': 'Выбито',
+  'rebuyCount': 'Докупок',
 };
 
 const en: Record<string, string> = {
@@ -669,6 +705,8 @@ const en: Record<string, string> = {
   'role.admin.desc': 'Full access: player base, points grids, structure, seasons, settings',
   'role.operator.desc': 'Runs the tournament: timer, knockouts, seating, registration. Cannot edit the player base or points grids',
   'roleFromLogin': 'Role is determined by your account',
+  'role.player': 'Player',
+  'role.player.desc': 'View rating and profile',
   'backup': 'Backup & restore',
   'export': 'Export database',
   'import': 'Import database',
@@ -731,7 +769,6 @@ const en: Record<string, string> = {
   'showAll': 'Show full leaderboard',
   'levelOf': 'Level',
 
-  /* registration & rebuy windows */
   'regWindow': 'Registration window',
   'regCloses': 'Registration closes',
   'regClosed': 'Registration closed',
@@ -751,7 +788,6 @@ const en: Record<string, string> = {
   'comeback': 'Comeback',
   'entriesShort': 'entries',
 
-  /* bonuses */
   'bonus': 'Bonus',
   'bonusTitle': 'Bonus chips',
   'bonusHint': 'Add chips to a participant with a reason — the bonus is added to the stack and counts in chip stats.',
@@ -766,12 +802,10 @@ const en: Record<string, string> = {
   'reason.birthday': 'Birthday',
   'reason.other': 'Other',
 
-  /* seasons */
   'seasonCreate': 'New season',
   'seasonEdit': 'Edit season',
   'seasonUpdated': 'Season updated',
 
-  /* chips per rebuy */
   'costs': 'Chips per buy-in',
   'rebuyCost': 'Chips per re-buy',
   'reentryCost': 'Chips per re-entry',
@@ -783,11 +817,9 @@ const en: Record<string, string> = {
   'seatRandomHint': 'New players take random free seats without moving already seated players.',
   'rebuyRandom': 'Re-buy to a random seat',
 
-  /* sounds */
   'sfxToggle': 'Event sound effects',
   'sfxHint': 'Tournament start, elimination, level, break, re-buy, re-entry, add-on, finale.',
 
-  /* start date & time */
   'startDate': 'Start date',
   'startTime': 'Start time',
   'dateToday': 'Today',
@@ -795,12 +827,10 @@ const en: Record<string, string> = {
   'dateIn2': 'In 2 days',
   'dateIn7': 'In a week',
 
-  /* bonus to several players */
   'choosePlayers': 'Choose players',
   'bonusApply': 'Grant bonus',
   'playersSelected': 'players selected',
 
-  /* knockout points */
   'knockoutPoints': 'Knockout points',
   'knockoutPointsEnable': 'Award knockout points',
   'knockoutPointsHint': 'Points are granted to the eliminator instantly and appear in the club leaderboard in live mode.',
@@ -813,7 +843,6 @@ const en: Record<string, string> = {
   'byStack': 'By chips',
   'eliminatedByShort': 'by',
 
-  /* sound section */
   'sfxSection': 'Sounds',
   'sfxMaster': 'Event sound effects',
   'sfxTest': 'Play',
@@ -826,7 +855,6 @@ const en: Record<string, string> = {
   'sfx.addon': 'Add-on',
   'sfx.end': 'Tournament finished',
 
-  /* tournament templates */
   'templates': 'Tournament templates',
   'saveTemplate': 'Save as template',
   'templateName': 'Template name',
@@ -836,16 +864,13 @@ const en: Record<string, string> = {
   'noTemplates': 'No saved templates',
   'templatesHint': 'A template stores the blind structure, points grid, bonuses, rebuy chips, windows and knockout settings.',
 
-  /* player starting points */
   'startPoints': 'Starting club points',
   'startPointsHint': 'Set once when the player is created. Afterwards points change only via tournament results.',
   'startPointsLocked': 'Starting points were fixed at creation and cannot be edited',
 
-  /* random seat confirmation */
   'seatResultTitle': 'Random seat assigned',
   'willSitAt': 'takes',
 
-  /* wipe */
   'wipeData': 'Wipe database',
   'wipeHint': 'All players, tournaments, seasons and settings will be permanently removed. Login accounts are kept.',
   'lockedShort': 'Locked',
@@ -853,7 +878,6 @@ const en: Record<string, string> = {
 
   'seatDisabledLive': 'Tournament is running — seats are locked. You can still seat unseated players randomly.',
 
-  /* tournament bonuses */
   'bonusesSection': 'Bonuses',
   'bonusName': 'Bonus name',
   'addBonus': 'Add bonus',
@@ -861,12 +885,10 @@ const en: Record<string, string> = {
   'bonusesHint': 'Bonuses are available on the control desk during play: one click adds chips to a player and records the reason in their history.',
   'noBonuses': 'No bonuses configured — add at least one.',
 
-  /* logo */
   'logoUpload': 'Upload logo',
   'logoRemove': 'Remove logo',
   'logoHint': 'The logo is shown in the header of every hall screen and in the control panel.',
 
-  /* players: date & avatar */
   'joinedAt': 'Club member since',
   'avatarUpload': 'Upload photo',
   'avatarRemove': 'Remove photo',
@@ -875,7 +897,6 @@ const en: Record<string, string> = {
   'confirmDeleteP': 'The player will be removed from the club base. Tournament history is kept anonymously. This cannot be undone.',
   'playerDeleted': 'Player deleted',
 
-  /* auth & profile */
   'auth.signIn': 'Sign in',
   'auth.signUp': 'Register',
   'auth.username': 'Username',
@@ -913,9 +934,61 @@ const en: Record<string, string> = {
   'auth.cannotDeleteSelf': 'You cannot delete your own account',
   'auth.lastAdmin': 'Cannot delete the last administrator',
 
-  /* live screen: registration window */
   'regLeft': 'until registration closes',
   'regUntil': 'Registration until',
+
+  'mobile.menu': 'Menu',
+  'mobile.control': 'Tournament Control',
+  'mobile.screens': 'Screens',
+
+  'player.dashboard': 'My Profile',
+  'player.rating': 'My Rating',
+  'player.history': 'My Tournaments',
+  'player.register': 'Player Registration',
+  'player.registerSuccess': 'You have successfully registered!',
+  'player.alreadyExists': 'A player with this email already exists',
+  'player.notFound': 'Player not found',
+  'player.inviteCode': 'Invitation code',
+  'player.linkAccount': 'Link account',
+  'player.linkSuccess': 'Account successfully linked!',
+  'player.rank': 'My rank',
+  'player.points': 'My points',
+  'player.played': 'Tournaments played',
+  'player.wins': 'Wins',
+  'player.top3': 'Top-3',
+  'player.best': 'Best result',
+
+  'screen.return': 'Return to the game!',
+  'screen.returnInfo': '{name} returns with {chips} chips to table {table}',
+  'returns': 'returns to the game',
+  'returned': 'returned to the game',
+  'returnToast': '{name} returns!\n{kind} +{chips} chips\nTable {table}{seat}',
+  'seatNumber': 'seat {seat}',
+  'menu': 'Menu',
+  'notes': 'Notes',
+  'notesSaved': 'Notes saved',
+  'notesPlaceholder': 'Enter notes about the player...',
+  'noNotes': 'No notes',
+  'clone': 'Clone',
+  'cloneTournament': 'Clone tournament',
+  'cloneHint': 'Create a copy of the tournament with all settings. New date – in 7 days.',
+  'exportStructure': 'Export structure',
+  'importStructure': 'Import structure',
+  'structureImported': 'Structure imported',
+  'invalidStructure': 'Invalid file format',
+  'tournamentCloned': 'Tournament cloned',
+  'achievements': 'Achievements',
+  'thisYear': 'This year',
+  'thisMonth': 'This month',
+  'thisWeek': 'This week',
+  'ratingDynamics': 'Rating dynamics',
+  'tournamentNumber': 'Tournament #',
+  'pointsDistribution': 'Points distribution',
+  'historyTable': 'Tournament history',
+  'tournamentName': 'Tournament name',
+  'noData': 'No data',
+  'knockouts': 'Knockouts',
+  'rebuyCount': 'Rebuys',
 };
 
 const dicts: Record<Lang, Record<string, string>> = { ru, en };

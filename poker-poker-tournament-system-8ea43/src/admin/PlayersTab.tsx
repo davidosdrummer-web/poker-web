@@ -4,6 +4,7 @@ import { actions, can, useApp } from '../lib/store';
 import { makeT } from '../lib/i18n';
 import { fmtDate, fullName, leaderboardRows, rankMap } from '../lib/utils';
 import { Avatar, Badge, Btn, EmptyState, Field, Icon, Modal, toast } from '../components/ui';
+import { PlayerNotes } from '../components/PlayerNotes';
 
 const AVATAR_COLORS = [null, '#b9881f', '#8a3d3d', '#3d6b8a', '#4a7a4f', '#7a4a74', '#8a6a3d', '#3d8a83', '#5b5b8a'];
 
@@ -62,7 +63,7 @@ export function PlayersTab() {
       </div>
 
       <div className="card overflow-x-auto">
-        <table className="w-full text-sm min-w-[860px]">
+        <table className="w-full text-sm min-w-[900px]">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-[0.16em] text-cream-500 border-b border-line-soft">
               <th className="px-4 py-2.5 font-bold">{t('rank')}</th>
@@ -75,6 +76,8 @@ export function PlayersTab() {
               <th className="px-3 py-2.5 font-bold text-right">{t('wins')}</th>
               <th className="px-3 py-2.5 font-bold text-right">{t('top3')}</th>
               <th className="px-3 py-2.5 font-bold text-right">{t('best')}</th>
+              <th className="px-3 py-2.5 font-bold text-right">{t('knockouts')}</th>
+              <th className="px-3 py-2.5 font-bold text-right">{t('rebuyCount')}</th>
               <th className="px-3 py-2.5 font-bold w-20"></th>
             </tr>
           </thead>
@@ -109,6 +112,8 @@ export function PlayersTab() {
                   <td className="px-3 py-2 text-right num text-cream-300">{st?.wins ?? 0}</td>
                   <td className="px-3 py-2 text-right num text-cream-300">{st?.top3 ?? 0}</td>
                   <td className="px-3 py-2 text-right num text-cream-300">{st?.best ?? 0}</td>
+                  <td className="px-3 py-2 text-right num text-cream-300">{st?.knockouts || 0}</td>
+                  <td className="px-3 py-2 text-right num text-cream-300">{st?.rebuyCount || 0}</td>
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-1">
                       {allowed && p.status === 'active' && (
@@ -234,6 +239,7 @@ function PlayerProfile({ player, onClose }: { player: Player; onClose: () => voi
               ))}
             </div>
           </Field>
+          {allowed && <PlayerNotes player={player} editable={true} />}
         </div>
 
         <div className="flex flex-col gap-3">
@@ -289,7 +295,6 @@ function toDateInput(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** читает файл как dataURL, ограничивая размер ~400 КБ */
 function readAvatar(file: File, cb: (data: string | null, err: string | null) => void) {
   if (file.size > 400 * 1024) {
     cb(null, 'avatarTooBig');

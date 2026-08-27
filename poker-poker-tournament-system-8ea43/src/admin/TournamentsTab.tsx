@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState, type DragEvent } from 'react';
+import React, { useEffect, useMemo, useState, type DragEvent } from 'react';
 import type { AppState, GameType, Tournament, TournamentTemplate } from '../lib/types';
 import { actions, balanceSuggestions, can, getState, regClosed, useApp } from '../lib/store';
 import { makeT, type TFunc } from '../lib/i18n';
 import { blindLevels } from '../lib/data';
 import { autoSeatPlan, entryPoints, fmtChips, fmtClock, fmtDate, fmtDateTime, fmtInt, fmtTimeOfDay, fullName, leaderboardRows, seatPositions, uid } from '../lib/utils';
 import { Avatar, Badge, Btn, EmptyState, Field, Icon, Modal, Toggle, toast } from '../components/ui';
+import { CloneTournament } from '../components/CloneTournament';
+import { StructureImportExport } from '../components/StructureImportExport';
+import { TournamentPointsChart } from '../components/TournamentPointsChart';
 
 function toLocalInput(ts: number): string {
   const d = new Date(ts);
@@ -12,7 +15,6 @@ function toLocalInput(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** ввод длительности в формате чч:мм:сс */
 function HMSInput({ seconds, onChange, disabled }: { seconds: number; onChange: (sec: number) => void; disabled?: boolean }) {
   const fmt = (sec: number) => {
     const h = Math.floor(sec / 3600);
@@ -75,7 +77,7 @@ function TournamentList({ onOpenEditor, onGoLive }: { onOpenEditor: (id: string,
     const winnerName = winner ? s.players.find((p) => p.id === winner.playerId) : null;
     const isActive = s.activeTournamentId === tor.id;
     return (
-      <div key={tor.id} className={`card p-4 flex items-center gap-4 flex-wrap transition-colors hover:border-felt-600 ${highlight ? 'border-gold-400/40' : ''} ${isActive ? 'border-gold-400/30' : ''}`}>
+      <div key={tor.id} className={`card p-4 flex items-center gap-4 flex-wrap transition-all duration-300 hover:border-felt-600 hover:shadow-lg hover:scale-[1.01] ${highlight ? 'border-gold-400/40' : ''} ${isActive ? 'border-gold-400/30' : ''}`}>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-display text-xl text-cream-100 truncate">{tor.name}</span>
@@ -89,7 +91,7 @@ function TournamentList({ onOpenEditor, onGoLive }: { onOpenEditor: (id: string,
             {winnerName && <span className="flex items-center gap-1 text-gold-300"><Icon name="crown" size={12} /> {fullName(winnerName)} (+{winner?.points} {t('pts')})</span>}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {tor.status !== 'finished' && (
             <Btn size="sm" variant={isActive ? 'gold' : 'dark'} icon="play" onClick={() => { actions.setActive(tor.id); onGoLive(); }}>
               {t('openLive')}
@@ -99,7 +101,10 @@ function TournamentList({ onOpenEditor, onGoLive }: { onOpenEditor: (id: string,
             {t('edit')}
           </Btn>
           {structure && (
-            <Btn size="sm" variant="ghost" icon="trash" onClick={() => setDelId(tor.id)} />
+            <>
+              <CloneTournament tournament={tor} onCloned={(id) => onOpenEditor(id, 'params')} />
+              <Btn size="sm" variant="ghost" icon="trash" onClick={() => setDelId(tor.id)} />
+            </>
           )}
         </div>
       </div>
@@ -190,7 +195,13 @@ function Section({ title, tone, children }: { title: string; tone: string; child
   return (
     <div className="mb-6">
       <h3 className={`font-display text-lg uppercase tracking-wider mb-2.5 ${tone}`}>{title}</h3>
-      <div className="flex flex-col gap-2.5">{children}</div>
+      <div className="flex flex-col gap-2.5">
+        {React.Children.map(children, (child, index) => (
+          <div className="anim-slide-right" style={{ animationDelay: `${index * 50}ms` }}>
+            {child}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -321,7 +332,10 @@ function TournamentEditor({ tor, section, onBack, onGoLive, onSection }: { tor: 
         <span className="text-xs text-cream-500 num">{fmtDateTime(tor.date, s.settings.language)}</span>
         <div className="flex-1" />
         {structure && (
-          <Btn variant="dark" icon="download" onClick={() => setTplOpen(true)}>{t('saveTemplate')}</Btn>
+          <>
+            <Btn variant="dark" icon="download" onClick={() => setTplOpen(true)}>{t('saveTemplate')}</Btn>
+            <StructureImportExport tournamentId={tor.id} />
+          </>
         )}
         {structure && (
           <Btn variant="ghost" icon="trash" onClick={() => setDelOpen(true)}>{t('delete')}</Btn>
@@ -364,12 +378,7 @@ function TournamentEditor({ tor, section, onBack, onGoLive, onSection }: { tor: 
       </div>
 
       {sec === 'params' && <ParamsSection tor={tor} editable={structure} />}
-      {sec === 'registration' && (
-        <RegistrationSection
-          tor={tor}
-          editable={liveOk && !regClosed(tor) && tor.status !== 'finished'}
-        />
-      )}
+      {sec === 'registration' && <RegistrationSection tor={tor} editable={liveOk && !regClosed(tor) && tor.status !== 'finished'} />}
       {sec === 'structure' && <StructureSection tor={tor} editable={structure} />}
       {sec === 'bonuses' && <BonusesSection tor={tor} editable={structure} />}
       {sec === 'points' && <PointsSection tor={tor} editable={structure && (tor.status === 'scheduled' || tor.status === 'registration')} />}
@@ -379,7 +388,6 @@ function TournamentEditor({ tor, section, onBack, onGoLive, onSection }: { tor: 
   );
 }
 
-/** дата + время старта: редактируемые поля с выпадающими списками (пресеты дат, время шагом 15 мин) */
 function StartDateTimeField({ value, disabled, onChange }: { value: number; disabled: boolean; onChange: (ts: number) => void }) {
   const s = useApp();
   const t = makeT(s.settings.language);
@@ -939,7 +947,6 @@ function SeatingSection({ tor, editable }: { tor: Tournament; editable: boolean 
                   <RowBtn icon="trash" red disabled={!editable} onClick={() => actions.removeTable(tor.id, tb.id)} />
                 </div>
                 <div className="relative w-full aspect-[1.6] select-none">
-                  {/* полотно стола */}
                   <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[54%] h-[60%] rounded-[50%] border border-gold-600/50 shadow-[0_0_0_5px_rgba(242,193,78,0.06),0_10px_30px_rgba(0,0,0,0.5)]" style={{ background: 'radial-gradient(ellipse at center, #20463080 0%, #14291c 70%, #0e1f15 100%)' }}>
                     <div className="absolute inset-[7%] rounded-[50%] border border-gold-500/25" />
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-2">
@@ -947,7 +954,6 @@ function SeatingSection({ tor, editable }: { tor: Tournament; editable: boolean 
                       <span className="font-display text-gold-200/90 text-sm leading-tight truncate max-w-full">{tb.name}</span>
                     </div>
                   </div>
-                  {/* места по периметру */}
                   <div className="absolute inset-[2%]">
                     {seatPositions(tb.seats).map((pos, i) => {
                       const seat = i + 1;
@@ -1037,7 +1043,10 @@ function ResultsSection({ tor }: { tor: Tournament }) {
           <Icon name="print" size={14} /> {t('print')}
         </button>
       </div>
-      <div className="flex flex-col gap-1.5 print-area">
+      
+      <TournamentPointsChart tournament={tor} height={200} />
+
+      <div className="flex flex-col gap-1.5 print-area mt-4">
         {rows.map((r) => {
           const e = tor.entries.find((x) => x.playerId === r.playerId);
           return (

@@ -1,4 +1,3 @@
-// src/admin/AuthGate.tsx
 import { useState } from 'react';
 import { auth, useAuth, type UserAccount } from '../lib/auth';
 import { actions, useApp } from '../lib/store';

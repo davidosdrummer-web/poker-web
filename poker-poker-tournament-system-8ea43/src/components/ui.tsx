@@ -46,6 +46,10 @@ const paths: Record<string, ReactNode> = {
   refresh: (<><path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20 3v4h-4" /></>),
   dice: (<><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" /><path d="M8.3 8.3h.01M15.7 8.3h.01M12 12h.01M8.3 15.7h.01M15.7 15.7h.01" /></>),
   link: (<><path d="M10 14a4.5 4.5 0 0 0 6.4.4l3-3a4.5 4.5 0 0 0-6.4-6.4L11.5 6.5" /><path d="M14 10a4.5 4.5 0 0 0-6.4-.4l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5" /></>),
+  sun: (<><circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></>),
+  moon: (<><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></>),
+  copy: (<><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></>),
+  menu: <path d="M3 6h18M3 12h18M3 18h18" />,
 };
 
 export function Icon({ name, size = 18, className = '', filled = false }: { name: string; size?: number; className?: string; filled?: boolean }) {
@@ -73,21 +77,26 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'gold' | 'dark' | 'ghost' | 'danger' | 'green';
   size?: 'sm' | 'md' | 'lg';
   icon?: string;
+  loading?: boolean;
 };
 
-export function Btn({ variant = 'dark', size = 'md', icon, className = '', children, ...rest }: BtnProps) {
-  const base = 'inline-flex items-center justify-center gap-2 font-semibold rounded-lg transition-all duration-150 active:scale-[0.97] disabled:opacity-35 disabled:pointer-events-none whitespace-nowrap';
-  const sizes = { sm: 'text-xs px-2.5 py-1.5', md: 'text-sm px-3.5 py-2', lg: 'text-base px-5 py-3' };
+export function Btn({ variant = 'dark', size = 'md', icon, loading = false, className = '', children, disabled, ...rest }: BtnProps) {
+  const base = 'inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-300 active:scale-[0.97] disabled:opacity-35 disabled:pointer-events-none whitespace-nowrap';
+  const sizes = { sm: 'text-xs px-3 py-1.5', md: 'text-sm px-4 py-2.5', lg: 'text-base px-6 py-3.5' };
   const variants = {
-    gold: 'bg-gold-400 text-felt-950 hover:bg-gold-300 shadow-[0_2px_12px_rgba(242,193,78,0.25)]',
-    dark: 'bg-felt-750 text-cream-100 border border-line hover:bg-felt-700 hover:border-felt-600',
-    ghost: 'bg-transparent text-cream-300 hover:bg-felt-800 hover:text-cream-100',
-    danger: 'bg-loss/15 text-loss border border-loss/30 hover:bg-loss/25',
-    green: 'bg-win/15 text-win border border-win/30 hover:bg-win/25',
+    gold: 'bg-gold-400 text-felt-950 hover:bg-gold-300 shadow-[0_2px_12px_rgba(242,193,78,0.25)] hover:shadow-[0_4px_20px_rgba(242,193,78,0.4)] hover:scale-[1.02]',
+    dark: 'bg-felt-750/80 backdrop-blur text-cream-100 border border-line hover:bg-felt-700 hover:border-felt-600 hover:shadow-lg hover:scale-[1.02]',
+    ghost: 'bg-transparent text-cream-300 hover:bg-felt-800/50 hover:text-cream-100 hover:scale-[1.02]',
+    danger: 'bg-loss/10 text-loss border border-loss/20 hover:bg-loss/20 hover:shadow-lg hover:shadow-loss/10 hover:scale-[1.02]',
+    green: 'bg-win/10 text-win border border-win/20 hover:bg-win/20 hover:shadow-lg hover:shadow-win/10 hover:scale-[1.02]',
   };
   return (
-    <button className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...rest}>
-      {icon && <Icon name={icon} size={size === 'sm' ? 14 : size === 'lg' ? 20 : 16} />}
+    <button className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} disabled={disabled || loading} {...rest}>
+      {loading ? (
+        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+      ) : icon ? (
+        <Icon name={icon} size={size === 'sm' ? 14 : size === 'lg' ? 20 : 16} />
+      ) : null}
       {children}
     </button>
   );
@@ -95,7 +104,15 @@ export function Btn({ variant = 'dark', size = 'md', icon, className = '', child
 
 /* ---------------- modal ---------------- */
 
-export function Modal({ title, onClose, children, wide = false, footer }: { title: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
+interface ModalProps {
+  title: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+  footer?: ReactNode;
+}
+
+export function Modal({ title, onClose, children, wide = false, footer }: ModalProps) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -103,18 +120,19 @@ export function Modal({ title, onClose, children, wide = false, footer }: { titl
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" onClick={onClose} />
-      <div className={`relative card anim-rise w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[88vh] flex flex-col shadow-2xl shadow-black/60 border-line`}>
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-line-soft">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm anim-fade-in" onClick={onClose} />
+      <div className={`relative modal-glass anim-slide-up w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[88vh] flex flex-col shadow-2xl rounded-2xl border border-line`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line-soft">
           <h3 className="font-display text-xl tracking-wide text-gold-300">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-md text-cream-500 hover:text-cream-100 hover:bg-felt-750 transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-lg text-cream-500 hover:text-cream-100 hover:bg-felt-750/50 transition-all hover:scale-110 active:scale-95">
             <Icon name="x" size={18} />
           </button>
         </div>
-        <div className="px-5 py-4 overflow-y-auto">{children}</div>
-        {footer && <div className="px-5 py-3.5 border-t border-line-soft flex justify-end gap-2">{footer}</div>}
+        <div className="px-6 py-4 overflow-y-auto">{children}</div>
+        {footer && <div className="px-6 py-3.5 border-t border-line-soft flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );
@@ -147,15 +165,17 @@ export function Toggle({ checked, onChange, label, disabled }: { checked: boolea
   );
 }
 
+/* ---------------- badges ---------------- */
+
 export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'gold' | 'green' | 'red' | 'info' }) {
   const tones = {
-    neutral: 'bg-felt-750 text-cream-300 border-line',
-    gold: 'bg-gold-400/12 text-gold-300 border-gold-400/25',
-    green: 'bg-win/12 text-win border-win/25',
-    red: 'bg-loss/12 text-loss border-loss/25',
-    info: 'bg-info/12 text-info border-info/25',
+    neutral: 'badge bg-felt-750/50 text-cream-300 border-line',
+    gold: 'badge-gold',
+    green: 'badge-green',
+    red: 'badge-red',
+    info: 'badge bg-info/10 text-info border-info/20',
   };
-  return <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${tones[tone]}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${tones[tone]}`}>{children}</span>;
 }
 
 /* ---------------- toasts ---------------- */
@@ -189,15 +209,15 @@ export function ToastHost() {
     };
   }, []);
   return (
-    <div className="fixed bottom-4 right-4 z-[70] flex flex-col gap-2 no-print">
+    <div className="fixed bottom-6 right-6 z-[70] flex flex-col gap-3 no-print">
       {items.map((t) => (
         <div
           key={t.id}
-          className={`anim-toast px-4 py-2.5 rounded-lg border text-sm font-semibold shadow-xl shadow-black/50 flex items-center gap-2.5 ${
-            t.tone === 'ok' ? 'bg-felt-800 border-win/30 text-win' : t.tone === 'warn' ? 'bg-felt-800 border-gold-400/30 text-gold-300' : 'bg-felt-800 border-loss/30 text-loss'
+          className={`anim-slide-in-right px-5 py-3.5 rounded-xl border text-sm font-semibold shadow-2xl shadow-black/50 flex items-center gap-3 backdrop-blur-sm ${
+            t.tone === 'ok' ? 'bg-felt-800/90 border-win/30 text-win' : t.tone === 'warn' ? 'bg-felt-800/90 border-gold-400/30 text-gold-300' : 'bg-felt-800/90 border-loss/30 text-loss'
           }`}
         >
-          <Icon name={t.tone === 'ok' ? 'check' : 'info'} size={16} />
+          <Icon name={t.tone === 'ok' ? 'check' : 'info'} size={18} />
           {t.text}
         </div>
       ))}
@@ -243,15 +263,15 @@ export function Avatar({ name, color, avatarData, size = 36, className = '' }: {
   const isStr = typeof size === 'string';
   return (
     <div
-      className={`shrink-0 rounded-full flex items-center justify-center font-display text-cream-100 select-none overflow-hidden ${className}`}
+      className={`shrink-0 rounded-full flex items-center justify-center font-display text-cream-100 select-none overflow-hidden avatar-ring ${className}`}
       style={{
         width: size,
         height: size,
         fontSize: isStr ? `calc(${size} * 0.42)` : (size as number) * 0.4,
-        background: `linear-gradient(145deg, ${bg}, rgba(10,18,13,0.85))`,
+        background: `linear-gradient(145deg, ${bg}, rgba(10,18,13,0.9))`,
         boxShadow: isStr
-          ? `inset 0 0 0 2px ${ring}66`
-          : `inset 0 0 0 1.5px ${ring}66, inset 0 -${(size as number) * 0.12}px ${(size as number) * 0.2}px rgba(0,0,0,0.45)`,
+          ? `0 0 0 2px ${ring}44, 0 8px 24px rgba(0,0,0,0.3)`
+          : `0 0 0 1.5px ${ring}44, 0 8px 24px rgba(0,0,0,0.3), inset 0 -${(size as number) * 0.12}px ${(size as number) * 0.2}px rgba(0,0,0,0.45)`,
         letterSpacing: '0.03em',
       }}
     >

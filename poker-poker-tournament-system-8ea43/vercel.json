@@ -1,7 +1,7 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "buildCommand": "cd poker-poker-tournament-system-8ea43 && npm run build",
+  "outputDirectory": "poker-poker-tournament-system-8ea43/dist",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/(.*)", "destination": "/poker-poker-tournament-system-8ea43/index.html" }
   ]
 }

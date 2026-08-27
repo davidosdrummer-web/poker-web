@@ -1,5 +1,5 @@
 export type Lang = 'ru' | 'en';
-export type Role = 'admin' | 'operator';
+export type Role = 'admin' | 'operator' | 'player';
 export type ScreenMode = 'live' | 'tables' | 'board' | 'results' | 'table';
 export type PlayerStatus = 'active' | 'blocked' | 'archived';
 export type GameType = 'holdem' | 'omaha' | 'mixed';
@@ -41,13 +41,14 @@ export interface Player {
   joinedAt: number;
   status: PlayerStatus;
   avatarColor: string | null;
-  /** загруженная аватарка (dataURL), приоритетнее цвета */
   avatarData?: string | null;
-  /** стартовые очки клуба — задаются один раз при создании, дальше меняются только турнирами */
   basePoints: number;
+  userId?: string | null;
+  notes?: string;
+  knockouts: number;
+  rebuyCount: number;
 }
 
-/** сохранённый шаблон турнира: структура, сетка очков, бонусы, окна, нокауты */
 export interface TournamentTemplate {
   id: string;
   name: string;
@@ -75,17 +76,23 @@ export interface BonusGrant {
   reason: string;
 }
 
+export interface StackSnapshot {
+  time: number;
+  levelIndex: number;
+  stack: number;
+  event: 'start' | 'level' | 'eliminate' | 'rebuy' | 'addon' | 'reentry' | 'finish';
+  note?: string;
+}
+
 export interface TournamentEntry {
   playerId: string;
   registeredAt: number;
-  /** количество входов (ре-ентри увеличивают) */
   entries: number;
   rebuys: number;
   addons: number;
   stack: number;
   tableId: string | null;
   seat: number | null;
-  /** последнее место до выбывания — для возвращения за тот же стол */
   lastTableId: string | null;
   lastSeat: number | null;
   eliminated: boolean;
@@ -94,9 +101,9 @@ export interface TournamentEntry {
   eliminatedBy: string | null;
   outLevel: number | null;
   bonusLog: BonusGrant[];
-  /** лайв-очки турнира (за выбивания) — сразу попадают в рейтинг клуба */
   livePoints: number;
   knockouts: number;
+  stackHistory: StackSnapshot[];
 }
 
 export interface ResultRow {
@@ -114,15 +121,10 @@ export interface Tournament {
   seasonId: string | null;
   status: TournamentStatus;
   startingStack: number;
-  /** дедлайн регистрации (ts), null — без ограничения */
   registrationClosesAt: number | null;
-  /** конец окна докупок и ре-ентри (ts), null — до конца турнира */
   rebuyClosesAt: number | null;
-  /** сколько фишек даёт каждая докупка — добавляется к стеку игрока */
   rebuyChips: number;
-  /** настраиваемые бонусы (наименование + фишки), используются на пульте */
   bonuses: TournamentBonus[];
-  /** начислять очки за выбивание (сразу, в режиме лайв) */
   knockoutPointsEnabled: boolean;
   knockoutPoints: number;
   reentryChips: number;
@@ -158,7 +160,6 @@ export interface ScreenConfig {
   boardSeasonId: string | null;
 }
 
-/** именованный бонус турнира (кальян, топ-пара, пунктуальность…) */
 export interface TournamentBonus {
   id: string;
   name: string;
@@ -169,17 +170,13 @@ export interface Settings {
   clubName: string;
   clubShort: string;
   accent: string;
-  /** логотип клуба (dataURL), null — встроенная пика */
   logo?: string | null;
   language: Lang;
   sound: 'off' | 'bell' | 'voice';
-  /** звуковые эффекты событий (старт, выбивание, уровни, докупки, финал) */
   sfx: boolean;
-  /** какие именно события озвучивать */
   sfxEvents: Record<'start' | 'eliminate' | 'level' | 'break' | 'rebuy' | 'reentry' | 'addon' | 'end', boolean>;
   role: Role;
   screens: ScreenConfig;
-  /** сохранённые шаблоны турниров */
   tournamentTemplates: TournamentTemplate[];
   pointsTemplate: PointsRow[];
   participationTemplate: number;

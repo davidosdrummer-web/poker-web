@@ -50,7 +50,6 @@ function render(specs: ToneSpec[]) {
 }
 
 const PRESETS: Record<SfxName, ToneSpec[]> = {
-  /* фанфара старта: восходящая арпеджио */
   start: [
     { freq: 392, at: 0, dur: 0.16, type: 'triangle', vol: 0.2 },
     { freq: 494, at: 0.13, dur: 0.16, type: 'triangle', vol: 0.2 },
@@ -58,39 +57,32 @@ const PRESETS: Record<SfxName, ToneSpec[]> = {
     { freq: 784, at: 0.4, dur: 0.5, type: 'triangle', vol: 0.24 },
     { freq: 784, at: 0.4, dur: 0.5, type: 'sine', vol: 0.1 },
   ],
-  /* выбивание: глухой нисходящий удар */
   eliminate: [
     { freq: 220, at: 0, dur: 0.22, type: 'sawtooth', vol: 0.16, glideTo: 82 },
     { freq: 164, at: 0.05, dur: 0.3, type: 'triangle', vol: 0.18, glideTo: 60 },
     { freq: 98, at: 0.16, dur: 0.34, type: 'sine', vol: 0.22, glideTo: 45 },
   ],
-  /* уровень: колокольчик с обертоном */
   level: [
     { freq: 880, at: 0, dur: 0.7, type: 'sine', vol: 0.2 },
     { freq: 1318.5, at: 0.02, dur: 0.55, type: 'sine', vol: 0.09 },
     { freq: 880, at: 0.16, dur: 0.6, type: 'sine', vol: 0.12 },
   ],
-  /* перерыв: мягкая нисходящая пара */
   break: [
     { freq: 587, at: 0, dur: 0.22, type: 'triangle', vol: 0.17 },
     { freq: 440, at: 0.2, dur: 0.34, type: 'triangle', vol: 0.17 },
   ],
-  /* ребай: «монетка» */
   rebuy: [
     { freq: 988, at: 0, dur: 0.08, type: 'square', vol: 0.08 },
     { freq: 1319, at: 0.07, dur: 0.14, type: 'square', vol: 0.08 },
   ],
-  /* ре-ентри: взлёт */
   reentry: [
     { freq: 330, at: 0, dur: 0.28, type: 'sawtooth', vol: 0.1, glideTo: 990 },
     { freq: 660, at: 0.1, dur: 0.2, type: 'sine', vol: 0.12, glideTo: 1320 },
   ],
-  /* адд-он: короткий блип */
   addon: [
     { freq: 660, at: 0, dur: 0.09, type: 'square', vol: 0.07 },
     { freq: 880, at: 0.08, dur: 0.12, type: 'square', vol: 0.07 },
   ],
-  /* финал: большая фанфара */
   end: [
     { freq: 523, at: 0, dur: 0.2, type: 'triangle', vol: 0.2 },
     { freq: 659, at: 0.17, dur: 0.2, type: 'triangle', vol: 0.2 },
@@ -106,7 +98,7 @@ let lastPlay = 0;
 export function playSfx(name: SfxName, enabled: boolean): void {
   if (!enabled) return;
   const now = Date.now();
-  if (now - lastPlay < 120) return; // защита от «очередей» звуков при массовых событиях
+  if (now - lastPlay < 120) return;
   lastPlay = now;
   try {
     render(PRESETS[name]);

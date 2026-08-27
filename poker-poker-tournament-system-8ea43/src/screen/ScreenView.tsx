@@ -25,6 +25,8 @@ export function ScreenView({ mode, preview = false }: { mode: ScreenMode; previe
   const [, force] = useReducer((x: number) => x + 1, 0);
   const [flash, setFlash] = useState(false);
   const prevKey = useRef<string | null>(null);
+  const [returnNotif, setReturnNotif] = useState<{ name: string; chips: number; table: string } | null>(null);
+  const prevEntriesRef = useRef<{ id: string; eliminated: boolean; stack: number }[]>([]);
 
   const active = getActiveTournament(s);
   const liveTarget = active;
@@ -107,6 +109,31 @@ export function ScreenView({ mode, preview = false }: { mode: ScreenMode; previe
     sfxPrev.current = cur;
   }, [s.rev, liveTarget, preview, s.settings.sfx]);
 
+  /* уведомление о возвращении игрока */
+  useEffect(() => {
+    if (!liveTarget) {
+      prevEntriesRef.current = [];
+      return;
+    }
+
+    const currentEntries = liveTarget.entries.map(e => ({ id: e.playerId, eliminated: e.eliminated, stack: e.stack }));
+
+    for (const e of currentEntries) {
+      const prev = prevEntriesRef.current.find(p => p.id === e.id);
+      if (prev && prev.eliminated && !e.eliminated) {
+        const p = s.players.find(x => x.id === e.id);
+        const table = liveTarget.tables.find(t => t.id === e.tableId);
+        setReturnNotif({
+          name: p ? fullName(p) : 'Игрок',
+          chips: e.stack,
+          table: table?.name || '—',
+        });
+        setTimeout(() => setReturnNotif(null), 4000);
+      }
+    }
+    prevEntriesRef.current = currentEntries;
+  }, [liveTarget, s.players]);
+
   const [clock, setClock] = useState('');
   useEffect(() => {
     const f = () =>
@@ -122,7 +149,12 @@ export function ScreenView({ mode, preview = false }: { mode: ScreenMode; previe
   const status = headerTournament?.status;
   const isBreak = status === 'break';
   const statusTone =
-    status === 'running' ? t('status.running') : status === 'paused' ? t('status.paused') : status === 'break' ? t('status.break') : status === 'finished' ? t('status.finished') : status === 'registration' ? t('status.registration') : status === 'scheduled' ? t('status.scheduled') : null;
+    status === 'running' ? t('status.running') :
+    status === 'paused' ? t('status.paused') :
+    status === 'break' ? t('status.break') :
+    status === 'finished' ? t('status.finished') :
+    status === 'registration' ? t('status.registration') :
+    status === 'scheduled' ? t('status.scheduled') : null;
   const accent = s.settings.accent;
 
   return (
@@ -132,7 +164,12 @@ export function ScreenView({ mode, preview = false }: { mode: ScreenMode; previe
       {/* header */}
       <div className="relative flex items-center gap-[1.2cqw] px-[2cqw] py-[1cqw] border-b border-[rgba(242,193,78,0.14)]">
         {s.settings.logo ? (
-          <img src={s.settings.logo} alt="" className="rounded-xl object-contain shrink-0" style={{ width: '3.1cqw', height: '3.1cqw', background: 'rgba(242,193,78,0.05)', boxShadow: `inset 0 0 0 2px ${accent}55` }} />
+          <img
+            src={s.settings.logo}
+            alt=""
+            className="rounded-xl object-contain shrink-0"
+            style={{ width: '3.1cqw', height: '3.1cqw', background: 'rgba(242,193,78,0.05)', boxShadow: `inset 0 0 0 2px ${accent}55` }}
+          />
         ) : (
           <svg viewBox="0 0 64 64" style={{ width: '3.1cqw', height: '3.1cqw' }} aria-hidden="true">
             <rect x="1.5" y="1.5" width="61" height="61" rx="12.5" fill="rgba(242,193,78,0.06)" stroke={accent} strokeOpacity="0.5" strokeWidth="2" />
@@ -151,7 +188,10 @@ export function ScreenView({ mode, preview = false }: { mode: ScreenMode; previe
         {statusTone && (
           <div
             className={`font-display px-[1cqw] py-[0.35cqw] rounded-md border tracking-widest ${
-              status === 'running' ? 'text-win border-win/40 bg-win/10' : isBreak ? 'text-gold-300 border-gold-400/40 bg-gold-400/10' : status === 'paused' ? 'text-loss border-loss/40 bg-loss/10' : 'text-cream-300 border-line bg-felt-800/60'
+              status === 'running' ? 'text-win border-win/40 bg-win/10' :
+              isBreak ? 'text-gold-300 border-gold-400/40 bg-gold-400/10' :
+              status === 'paused' ? 'text-loss border-loss/40 bg-loss/10' :
+              'text-cream-300 border-line bg-felt-800/60'
             }`}
             style={{ fontSize: '1.45cqw' }}
           >
@@ -174,6 +214,24 @@ export function ScreenView({ mode, preview = false }: { mode: ScreenMode; previe
           </button>
         )}
       </div>
+
+      {/* Уведомление о возвращении игрока */}
+      {returnNotif && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 anim-rise">
+          <div className="card p-6 border-gold-400/60 shadow-2xl shadow-gold-400/20 text-center max-w-md">
+            <div className="flex items-center gap-2 justify-center text-gold-300 mb-2">
+              <Icon name="refresh" size={24} className="anim-spin-slow" />
+              <span className="font-display text-2xl">{t('screen.return')}</span>
+            </div>
+            <p className="text-cream-100 font-semibold">
+              {t('screen.returnInfo')
+                .replace('{name}', returnNotif.name)
+                .replace('{chips}', fmtChips(returnNotif.chips))
+                .replace('{table}', returnNotif.table)}
+            </p>
+          </div>
+        </div>
+      )}
 
       {mode === 'live' && <LiveBody s={s} t={t} target={liveTarget} flash={flash} />}
       {mode === 'tables' && <TablesBody s={s} t={t} target={liveTarget} />}
@@ -343,7 +401,6 @@ function StatCard({ label, value, sub, icon, accent }: { label: string; value: s
   );
 }
 
-/** обратный отсчёт до конца регистрации (крупно, на панели таймера до старта) */
 function RegPanel({ s, t, target, stats }: { s: AppState; t: TFunc; target: Tournament; stats: ReturnType<typeof liveStats> }) {
   const regRemain = target.registrationClosesAt != null ? Math.max(0, Math.round((target.registrationClosesAt - Date.now()) / 1000)) : null;
   return (
@@ -367,7 +424,6 @@ function RegPanel({ s, t, target, stats }: { s: AppState; t: TFunc; target: Tour
   );
 }
 
-/** карточка окна регистрации в строке статистики во время игры */
 function RegStatCard({ t, target }: { t: TFunc; target: Tournament }) {
   const open = !regClosed(target);
   const remain = target.registrationClosesAt != null ? Math.max(0, Math.round((target.registrationClosesAt - Date.now()) / 1000)) : null;
@@ -379,8 +435,6 @@ function RegStatCard({ t, target }: { t: TFunc; target: Tournament }) {
   }
   return <StatCard label={t('regWindow')} value={target.registrationClosesAt ? fmtTimeOfDay(target.registrationClosesAt) : '—'} sub={t('window.closed')} icon="timer" />;
 }
-
-/* ================= TABLES ================= */
 
 /* ================= LIVE TOURNAMENT TABLE ================= */
 
@@ -423,7 +477,6 @@ function LiveTableBody({ s, t, target }: { s: AppState; t: TFunc; target: Tourna
       </div>
 
       <div className="flex-1 min-h-0 grid gap-[1.6cqw]" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
-        {/* в игре — по фишкам */}
         <div className="flex flex-col min-h-0 rounded-xl border border-line-soft bg-black/20 overflow-hidden">
           <div className="grid items-center px-[1.4cqw] py-[0.6cqw] border-b border-line-soft bg-felt-900/60" style={{ gridTemplateColumns: '3cqw 4cqw 1fr 8cqw 9cqw 7cqw' }}>
             <span className="screen-label uppercase tracking-[0.16em] text-cream-700 font-bold">#</span>
@@ -454,7 +507,6 @@ function LiveTableBody({ s, t, target }: { s: AppState; t: TFunc; target: Tourna
           </ScrollCol>
         </div>
 
-        {/* выбыли */}
         <div className="flex flex-col min-h-0 rounded-xl border border-line-soft bg-black/20 overflow-hidden">
           <div className="flex items-center justify-between px-[1.4cqw] py-[0.6cqw] border-b border-line-soft bg-felt-900/60">
             <span className="screen-label uppercase tracking-[0.16em] text-cream-700 font-bold">{t('out')} · {out.length}</span>
@@ -519,6 +571,8 @@ function ScrollCol({ children }: { children: React.ReactNode }) {
   );
 }
 
+/* ================= TABLES ================= */
+
 function TablesBody({ s, t, target }: { s: AppState; t: TFunc; target: Tournament | null }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -560,7 +614,6 @@ function TablesBody({ s, t, target }: { s: AppState; t: TFunc; target: Tournamen
         const list = seated(tb.id);
         return (
           <div key={prefix + tb.id} className="relative w-full" style={{ aspectRatio: '1.55' }}>
-            {/* сукно */}
             <div
               className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[62%] h-[62%] rounded-[50%] border-2 border-gold-600/60 shadow-[0_0_0_6px_rgba(242,193,78,0.07),0_14px_40px_rgba(0,0,0,0.55)]"
               style={{ background: 'radial-gradient(ellipse at center, rgba(38,84,58,0.6) 0%, #16301f 62%, #0f2417 100%)' }}
@@ -572,7 +625,6 @@ function TablesBody({ s, t, target }: { s: AppState; t: TFunc; target: Tournamen
                 <div className="screen-label num text-cream-500 font-bold">{list.length}/{tb.seats}</div>
               </div>
             </div>
-            {/* места по периметру, номер виден всегда */}
             {seatPositions(tb.seats).map((pos, i) => {
               const seat = i + 1;
               const occ = list.find((e) => e.seat === seat);
@@ -672,14 +724,12 @@ function BoardBody({ s, t }: { s: AppState; t: TFunc }) {
         <div className="flex-1 flex items-center justify-center screen-sub text-cream-500">{t('boardEmpty')}</div>
       ) : (
         <div className="flex-1 min-h-0 grid grid-cols-[38%_1fr] gap-[1.6cqw]">
-          {/* подиум топ-3 */}
           <div className="grid grid-cols-3 items-end gap-[0.9cqw] pb-[0.4cqw]">
             {top3[1] && podiumCard(top3[1], 2)}
             {top3[0] && podiumCard(top3[0], 1)}
             {top3[2] && podiumCard(top3[2], 3)}
           </div>
 
-          {/* места 4–10 */}
           <div className="flex flex-col min-h-0 rounded-xl border border-line-soft bg-black/20 overflow-hidden">
             <div className="grid grid-cols-[3.4cqw_4cqw_1fr_7cqw_6cqw_8cqw] items-center px-[1.2cqw] py-[0.5cqw] border-b border-line-soft bg-felt-900/60">
               <span className="screen-label uppercase tracking-[0.18em] text-cream-700 font-bold">#</span>
@@ -692,17 +742,17 @@ function BoardBody({ s, t }: { s: AppState; t: TFunc }) {
               {rest.map((r, i) => {
                 const p = pOf(r.playerId);
                 return (
-                <div key={r.playerId} className="grid grid-cols-[3.4cqw_4cqw_1fr_7cqw_6cqw_8cqw] items-center px-[1.2cqw] py-[0.45cqw] border-b border-line-soft/40 last:border-0">
-                  <span className="font-display num text-cream-500" style={{ fontSize: '1.9cqw' }}>{i + 4}</span>
-                  <span>{p && <Avatar name={fullName(p)} color={p.avatarColor} avatarData={p.avatarData} size="3.1cqw" />}</span>
-                  <span className="min-w-0">
-                    <span className="screen-name font-bold text-cream-100 truncate block">{nickOf(r.playerId) || nameOf(r.playerId)}</span>
-                    <span className="screen-label text-cream-700 font-semibold truncate block">{nameOf(r.playerId)}</span>
-                  </span>
-                  <span className="screen-sub num text-cream-500 text-right">{r.played}</span>
-                  <span className="screen-sub num text-cream-500 text-right">{r.wins}</span>
-                  <span className="font-display num text-[color:var(--acc)] text-right" style={{ fontSize: '2.1cqw' }}>{r.points}</span>
-                </div>
+                  <div key={r.playerId} className="grid grid-cols-[3.4cqw_4cqw_1fr_7cqw_6cqw_8cqw] items-center px-[1.2cqw] py-[0.45cqw] border-b border-line-soft/40 last:border-0">
+                    <span className="font-display num text-cream-500" style={{ fontSize: '1.9cqw' }}>{i + 4}</span>
+                    <span>{p && <Avatar name={fullName(p)} color={p.avatarColor} avatarData={p.avatarData} size="3.1cqw" />}</span>
+                    <span className="min-w-0">
+                      <span className="screen-name font-bold text-cream-100 truncate block">{nickOf(r.playerId) || nameOf(r.playerId)}</span>
+                      <span className="screen-label text-cream-700 font-semibold truncate block">{nameOf(r.playerId)}</span>
+                    </span>
+                    <span className="screen-sub num text-cream-500 text-right">{r.played}</span>
+                    <span className="screen-sub num text-cream-500 text-right">{r.wins}</span>
+                    <span className="font-display num text-[color:var(--acc)] text-right" style={{ fontSize: '2.1cqw' }}>{r.points}</span>
+                  </div>
                 );
               })}
               {rest.length === 0 && <div className="flex-1 flex items-center justify-center screen-sub text-cream-700">{t('empty')}</div>}
@@ -742,19 +792,19 @@ function ResultsBody({ s, t, target }: { s: AppState; t: TFunc; target: Tourname
   const podium = (r: (typeof rows)[number], height: string, icon: string, label: string, tone: string) => {
     const p = pOf(r.playerId);
     return (
-    <div className="flex flex-col items-stretch self-end w-full">
-      <div className={`w-full rounded-t-xl border border-b-0 px-[1.4cqw] pt-[0.8cqw] pb-[0.7cqw] flex flex-col items-center justify-end gap-[0.25cqw] ${tone}`} style={{ minHeight: height }}>
-        <Icon name={icon} size={0} className="w-[2.4cqw] h-[2.4cqw]" filled />
-        {p && <Avatar name={fullName(p)} color={p.avatarColor} avatarData={p.avatarData} size="5.6cqw" />}
-        <div className="screen-label uppercase tracking-[0.2em] font-bold opacity-80">{label}</div>
-        <div className="font-display text-center truncate max-w-full leading-none" style={{ fontSize: '2.1cqw' }}>
-          {nickOf(r.playerId) || nameOf(r.playerId)}
+      <div className="flex flex-col items-stretch self-end w-full">
+        <div className={`w-full rounded-t-xl border border-b-0 px-[1.4cqw] pt-[0.8cqw] pb-[0.7cqw] flex flex-col items-center justify-end gap-[0.25cqw] ${tone}`} style={{ minHeight: height }}>
+          <Icon name={icon} size={0} className="w-[2.4cqw] h-[2.4cqw]" filled />
+          {p && <Avatar name={fullName(p)} color={p.avatarColor} avatarData={p.avatarData} size="5.6cqw" />}
+          <div className="screen-label uppercase tracking-[0.2em] font-bold opacity-80">{label}</div>
+          <div className="font-display text-center truncate max-w-full leading-none" style={{ fontSize: '2.1cqw' }}>
+            {nickOf(r.playerId) || nameOf(r.playerId)}
+          </div>
+          <div className="screen-label text-cream-500 font-semibold truncate max-w-full">{nameOf(r.playerId)}</div>
+          <div className="font-display num" style={{ fontSize: '2.7cqw', lineHeight: 1 }}>+{r.points}</div>
+          <RankMove before={before.get(r.playerId)} after={after.get(r.playerId)} size="1.4cqw" />
         </div>
-        <div className="screen-label text-cream-500 font-semibold truncate max-w-full">{nameOf(r.playerId)}</div>
-        <div className="font-display num" style={{ fontSize: '2.7cqw', lineHeight: 1 }}>+{r.points}</div>
-        <RankMove before={before.get(r.playerId)} after={after.get(r.playerId)} size="1.4cqw" />
       </div>
-    </div>
     );
   };
 
@@ -780,16 +830,16 @@ function ResultsBody({ s, t, target }: { s: AppState; t: TFunc; target: Tourname
           {rest.map((r) => {
             const p = pOf(r.playerId);
             return (
-            <div key={r.playerId} className="w-[62%] flex items-center gap-[1cqw] rounded-lg border border-line-soft bg-felt-900/60 px-[1.4cqw] py-[0.35cqw]">
-              <span className="font-display num text-gold-600 w-[2.6cqw]" style={{ fontSize: '1.9cqw' }}>{r.place}.</span>
-              {p && <Avatar name={fullName(p)} color={p.avatarColor} avatarData={p.avatarData} size="2.9cqw" />}
-              <span className="flex-1 min-w-0">
-                <span className="screen-name font-bold truncate block leading-tight">{nickOf(r.playerId) || nameOf(r.playerId)}</span>
-                <span className="screen-label text-cream-700 font-semibold truncate block">{nameOf(r.playerId)}</span>
-              </span>
-              <RankMove before={before.get(r.playerId)} after={after.get(r.playerId)} size="1.3cqw" />
-              <span className="screen-sub num text-gold-300 font-bold">+{r.points} {t('pts')}</span>
-            </div>
+              <div key={r.playerId} className="w-[62%] flex items-center gap-[1cqw] rounded-lg border border-line-soft bg-felt-900/60 px-[1.4cqw] py-[0.35cqw]">
+                <span className="font-display num text-gold-600 w-[2.6cqw]" style={{ fontSize: '1.9cqw' }}>{r.place}.</span>
+                {p && <Avatar name={fullName(p)} color={p.avatarColor} avatarData={p.avatarData} size="2.9cqw" />}
+                <span className="flex-1 min-w-0">
+                  <span className="screen-name font-bold truncate block leading-tight">{nickOf(r.playerId) || nameOf(r.playerId)}</span>
+                  <span className="screen-label text-cream-700 font-semibold truncate block">{nameOf(r.playerId)}</span>
+                </span>
+                <RankMove before={before.get(r.playerId)} after={after.get(r.playerId)} size="1.3cqw" />
+                <span className="screen-sub num text-gold-300 font-bold">+{r.points} {t('pts')}</span>
+              </div>
             );
           })}
         </div>

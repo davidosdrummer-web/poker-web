@@ -3,20 +3,38 @@ import { useApp } from '../lib/store';
 import { makeT } from '../lib/i18n';
 import { downloadFile, fullName, leaderboardRows } from '../lib/utils';
 import { Avatar, Btn, EmptyState, Icon } from '../components/ui';
+import { PeriodFilter } from '../components/PeriodFilter';
+
+type Period = 'all' | 'month' | 'week' | 'year';
 
 export function LeaderboardTab() {
   const s = useApp();
   const t = makeT(s.settings.language);
   const [seasonId, setSeasonId] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>('all');
 
-  const rows = useMemo(() => leaderboardRows(s.players, s.tournaments, seasonId), [s.players, s.tournaments, seasonId]);
+  const getPeriodStart = (period: Period): number | null => {
+    const now = Date.now();
+    switch (period) {
+      case 'week': return now - 7 * 24 * 60 * 60 * 1000;
+      case 'month': return now - 30 * 24 * 60 * 60 * 1000;
+      case 'year': return now - 365 * 24 * 60 * 60 * 1000;
+      default: return null;
+    }
+  };
+
+  const periodStart = getPeriodStart(period);
+  const rows = useMemo(
+    () => leaderboardRows(s.players, s.tournaments, seasonId, null, periodStart),
+    [s.players, s.tournaments, seasonId, periodStart]
+  );
   const season = seasonId ? s.seasons.find((x) => x.id === seasonId) : null;
 
   const csv = () => {
-    const head = ['Rank', 'Player', 'Nickname', 'Points', 'Played', 'Wins', 'Top3', 'Finals', 'Best', 'AvgPoints', 'WinRate%'];
+    const head = ['Rank', 'Player', 'Nickname', 'Points', 'Played', 'Wins', 'Top3', 'Finals', 'Best', 'AvgPoints', 'WinRate%', 'Knockouts', 'Rebuys'];
     const lines = rows.map((r, i) => {
       const p = s.players.find((x) => x.id === r.playerId);
-      return [i + 1, p ? fullName(p) : r.playerId, p?.nickname ?? '', r.points, r.played, r.wins, r.top3, r.finals, r.best, r.played ? (r.points / r.played).toFixed(1) : 0, r.played ? Math.round((r.wins / r.played) * 100) : 0].join(';');
+      return [i + 1, p ? fullName(p) : r.playerId, p?.nickname ?? '', r.points, r.played, r.wins, r.top3, r.finals, r.best, r.played ? (r.points / r.played).toFixed(1) : 0, r.played ? Math.round((r.wins / r.played) * 100) : 0, r.knockouts || 0, r.rebuyCount || 0].join(';');
     });
     downloadFile(`rating-${season ? season.name : 'alltime'}.csv`, [head.join(';'), ...lines].join('\n'), 'text/csv');
   };
@@ -31,22 +49,25 @@ export function LeaderboardTab() {
         <Btn icon="download" onClick={csv} disabled={rows.length === 0}>{t('exportCsv')}</Btn>
       </div>
 
-      <div className="flex gap-1 bg-felt-900 border border-line rounded-lg p-1 w-fit mb-4 flex-wrap">
-        <button onClick={() => setSeasonId(null)} className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-colors ${seasonId === null ? 'bg-gold-400 text-felt-950' : 'text-cream-500 hover:text-cream-100'}`}>
-          {t('allTime')}
-        </button>
-        {s.seasons.map((x) => (
-          <button key={x.id} onClick={() => setSeasonId(x.id)} className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-colors ${seasonId === x.id ? 'bg-gold-400 text-felt-950' : 'text-cream-500 hover:text-cream-100'}`}>
-            {x.name}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <PeriodFilter value={period} onChange={setPeriod} />
+        <div className="flex gap-1 bg-felt-900 border border-line rounded-lg p-1 flex-wrap">
+          <button onClick={() => setSeasonId(null)} className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-colors ${seasonId === null ? 'bg-gold-400 text-felt-950' : 'text-cream-500 hover:text-cream-100'}`}>
+            {t('allTime')}
           </button>
-        ))}
+          {s.seasons.map((x) => (
+            <button key={x.id} onClick={() => setSeasonId(x.id)} className={`px-3.5 py-1.5 rounded-md text-xs font-bold transition-colors ${seasonId === x.id ? 'bg-gold-400 text-felt-950' : 'text-cream-500 hover:text-cream-100'}`}>
+              {x.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {rows.length === 0 ? (
         <div className="card"><EmptyState icon="trophy" text={t('boardEmpty')} /></div>
       ) : (
         <div className="card overflow-x-auto">
-          <table className="w-full text-sm min-w-[820px]">
+          <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-[0.16em] text-cream-500 border-b border-line-soft">
                 <th className="px-4 py-2.5 font-bold w-16">{t('place')}</th>
@@ -57,8 +78,8 @@ export function LeaderboardTab() {
                 <th className="px-3 py-2.5 font-bold text-right">{t('top3')}</th>
                 <th className="px-3 py-2.5 font-bold text-right">{t('finals')}</th>
                 <th className="px-3 py-2.5 font-bold text-right">{t('best')}</th>
-                <th className="px-3 py-2.5 font-bold text-right">{t('avgPoints')}</th>
-                <th className="px-3 py-2.5 font-bold text-right">{t('winRate')}</th>
+                <th className="px-3 py-2.5 font-bold text-right">{t('knockouts')}</th>
+                <th className="px-3 py-2.5 font-bold text-right">{t('rebuyCount')}</th>
               </tr>
             </thead>
             <tbody>
@@ -88,8 +109,8 @@ export function LeaderboardTab() {
                     <td className="px-3 py-2.5 text-right num text-cream-300">{r.top3}</td>
                     <td className="px-3 py-2.5 text-right num text-cream-300">{r.finals}</td>
                     <td className="px-3 py-2.5 text-right num text-cream-300">{r.best}</td>
-                    <td className="px-3 py-2.5 text-right num text-cream-300">{r.played ? (r.points / r.played).toFixed(1) : '—'}</td>
-                    <td className="px-3 py-2.5 text-right num text-cream-300">{r.played ? `${Math.round((r.wins / r.played) * 100)}%` : '—'}</td>
+                    <td className="px-3 py-2.5 text-right num text-cream-300">{r.knockouts || 0}</td>
+                    <td className="px-3 py-2.5 text-right num text-cream-300">{r.rebuyCount || 0}</td>
                   </tr>
                 );
               })}

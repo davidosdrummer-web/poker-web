@@ -122,31 +122,57 @@ export interface LbRow {
   top3: number;
   finals: number;
   best: number;
+  knockouts: number;
+  rebuyCount: number;
 }
 
-export function leaderboardRows(players: Player[], tournaments: Tournament[], seasonId: string | null, excludeTournamentId?: string): LbRow[] {
+export function leaderboardRows(
+  players: Player[],
+  tournaments: Tournament[],
+  seasonId: string | null,
+  excludeTournamentId?: string,
+  periodStart?: number | null
+): LbRow[] {
   const acc = new Map<string, LbRow>();
   const row = (pid: string): LbRow => {
     let r = acc.get(pid);
     if (!r) {
-      r = { playerId: pid, points: 0, played: 0, wins: 0, top3: 0, finals: 0, best: 0 };
+      r = {
+        playerId: pid,
+        points: 0,
+        played: 0,
+        wins: 0,
+        top3: 0,
+        finals: 0,
+        best: 0,
+        knockouts: 0,
+        rebuyCount: 0,
+      };
       acc.set(pid, r);
     }
     return r;
   };
-  // стартовые очки клуба — задаются один раз при создании игрока и учитываются в общем зачёте
+
   if (!seasonId) {
     for (const p of players) {
       if (p.basePoints > 0) row(p.id).points += p.basePoints;
+      if (p.knockouts > 0) row(p.id).knockouts = p.knockouts;
+      if (p.rebuyCount > 0) row(p.id).rebuyCount = p.rebuyCount;
     }
   }
+
   for (const t of tournaments) {
     if (seasonId && t.seasonId !== seasonId) continue;
     if (excludeTournamentId && t.id === excludeTournamentId) continue;
+    if (periodStart && t.date < periodStart) continue;
     const finished = t.status === 'finished';
     for (const e of t.entries) {
       const r = row(e.playerId);
-      // лайв-очки (за выбивания) учитываются сразу, даже до завершения турнира
+      const player = players.find(p => p.id === e.playerId);
+      if (player) {
+        r.knockouts = player.knockouts || 0;
+        r.rebuyCount = player.rebuyCount || 0;
+      }
       if (e.livePoints > 0) r.points += e.livePoints;
       if (!finished) continue;
       if (e.place == null || e.points == null) continue;
@@ -158,10 +184,12 @@ export function leaderboardRows(players: Player[], tournaments: Tournament[], se
       r.best = Math.max(r.best, e.points + e.livePoints);
     }
   }
+
   const nameOf = (pid: string) => {
     const p = players.find((x) => x.id === pid);
     return p ? fullName(p) : '';
   };
+
   return [...acc.values()]
     .filter((r) => r.played > 0 || r.points > 0)
     .sort((a, b) => b.points - a.points || b.wins - a.wins || b.top3 - a.top3 || nameOf(a.playerId).localeCompare(nameOf(b.playerId)));
@@ -214,8 +242,6 @@ export function autoSeatPlan(
   if (tables.length === 0) return plan;
 
   if (mode === 'random') {
-    // гибкий рандом: перемешиваем и игроков, и все свободные места сразу —
-    // рассадка получается «вразброс», а не подряд по столам
     const players = shuffle(eligible);
     const seats = shuffle(freeSeatList(tables, []));
     players.forEach((e, i) => {
@@ -245,7 +271,6 @@ export function autoSeatPlan(
   return plan;
 }
 
-/** все свободные места по всем столам */
 export function freeSeatList(tables: TableT[], entries: TournamentEntry[]): { tableId: string; seat: number }[] {
   const taken = new Map<string, Set<number>>();
   for (const e of entries) {
@@ -262,6 +287,10 @@ export function freeSeatList(tables: TableT[], entries: TournamentEntry[]): { ta
     }
   }
   return res;
+}
+
+export function freeSeats(t: Tournament): { tableId: string; seat: number }[] {
+  return freeSeatList(t.tables, t.entries);
 }
 
 export interface Suggestion {

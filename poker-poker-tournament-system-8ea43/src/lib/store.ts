@@ -1,4 +1,3 @@
-// src/lib/store.ts
 import { useSyncExternalStore } from 'react';
 import type {
   AppState,
@@ -18,12 +17,10 @@ import type {
 } from './types';
 import { blindLevels, defaultBonuses, seedState } from './data';
 import { autoSeatPlan, balanceSuggestions, entryPoints, fmtChips, fmtInt, fullName, leaderboardRows, liveStats, uid, type AutoSeatMode, type Suggestion } from './utils';
-// Импортируем Firebase
 import { db, getUserId, ref, set, get, onValue, off } from './firebase';
-// Импортируем currentRole для получения роли из аутентификации
 import { currentRole } from './auth';
+import { sendNotification } from './notifications';
 
-// ---------- Константы и нормализация ----------
 const DEFAULTS = seedState();
 
 function normalize(raw: AppState): AppState {
@@ -32,7 +29,7 @@ function normalize(raw: AppState): AppState {
     ...raw,
     settings: { ...DEFAULTS.settings, ...raw.settings, screens: { ...DEFAULTS.settings.screens, ...(raw.settings?.screens ?? {}) }, sfxEvents: { ...DEFAULTS.settings.sfxEvents, ...(raw.settings?.sfxEvents ?? {}) }, tournamentTemplates: raw.settings?.tournamentTemplates ?? [] },
   };
-  base.players = base.players.map((p) => Object.assign({ basePoints: 0 }, p));
+  base.players = base.players.map((p) => Object.assign({ basePoints: 0, knockouts: 0, rebuyCount: 0 }, p));
   base.tournaments = base.tournaments.map((t) => {
     const merged = Object.assign(
       { registrationClosesAt: null as number | null, rebuyClosesAt: null as number | null, knockoutPointsEnabled: true, knockoutPoints: 3 },
@@ -45,7 +42,7 @@ function normalize(raw: AppState): AppState {
     if (!Array.isArray(legacy.bonuses)) merged.bonuses = defaultBonuses();
     merged.entries = t.entries.map((e) =>
       Object.assign(
-        { entries: 1, lastTableId: null as string | null, lastSeat: null as number | null, bonusLog: [] as Tournament['entries'][number]['bonusLog'], livePoints: 0, knockouts: 0 },
+        { entries: 1, lastTableId: null as string | null, lastSeat: null as number | null, bonusLog: [] as Tournament['entries'][number]['bonusLog'], livePoints: 0, knockouts: 0, stackHistory: [] },
         e,
       ),
     );
@@ -54,8 +51,7 @@ function normalize(raw: AppState): AppState {
   return base;
 }
 
-// ---------- Состояние и подписки ----------
-let state: AppState = seedState(); // временная заглушка
+let state: AppState = seedState();
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -67,11 +63,9 @@ function subscribe(l: () => void): () => void {
   return () => listeners.delete(l);
 }
 
-// ---------- Загрузка из Firebase ----------
 async function loadFromFirebase(): Promise<AppState> {
   const userId = getUserId();
   if (!userId) return seedState();
-
   try {
     const stateRef = ref(db, `users/${userId}/state`);
     const snapshot = await get(stateRef);
@@ -87,16 +81,13 @@ async function loadFromFirebase(): Promise<AppState> {
   return seedState();
 }
 
-// ---------- Сохранение в Firebase (с дебаунсом) ----------
 let persistTimeout: ReturnType<typeof setTimeout> | null = null;
 
 async function saveToFirebase() {
   const userId = getUserId();
   if (!userId) return;
-
   try {
     const stateRef = ref(db, `users/${userId}/state`);
-    // Сохраняем копию, удаляя возможные циклические ссылки (их нет)
     await set(stateRef, {
       ...state,
       savedAt: Date.now()
@@ -107,60 +98,47 @@ async function saveToFirebase() {
 }
 
 function persist(broadcast: boolean) {
-  // Дебаунс – группируем изменения
   if (persistTimeout) clearTimeout(persistTimeout);
   persistTimeout = setTimeout(() => {
     saveToFirebase();
     persistTimeout = null;
   }, 300);
-  // broadcast игнорируем – Firebase сам синхронизирует
 }
 
-// ---------- Подписка на изменения из Firebase (синхронизация между устройствами) ----------
 let firebaseUnsubscribe: (() => void) | null = null;
 
 function initFirebaseSync() {
   const userId = getUserId();
   if (!userId) {
-    // Если пользователь вышел, отписываемся
     if (firebaseUnsubscribe) {
       firebaseUnsubscribe();
       firebaseUnsubscribe = null;
     }
     return;
   }
-
   const stateRef = ref(db, `users/${userId}/state`);
-
-  // Отписываемся от старой подписки
   if (firebaseUnsubscribe) {
     firebaseUnsubscribe();
     firebaseUnsubscribe = null;
   }
-
   firebaseUnsubscribe = onValue(stateRef, (snapshot) => {
     if (!snapshot.exists()) return;
     const remote = snapshot.val();
     if (remote && remote.rev > state.rev) {
       state = normalize(remote);
-      // Принудительно устанавливаем роль из auth
       const userRole = currentRole();
       if (userRole && state.settings.role !== userRole) {
         state.settings.role = userRole;
-        // Увеличиваем rev, чтобы сохранить изменения
         state.rev += 1;
-        // Сохраняем обновленное состояние
         persist(true);
       }
-      emit(); // Оповещаем React
+      emit();
     }
   });
 }
 
-// ---------- Инициализация хранилища ----------
 export async function initStore() {
   const loaded = await loadFromFirebase();
-  // Принудительно устанавливаем роль из auth, чтобы перезаписать сохранённую роль
   const userRole = currentRole();
   if (userRole) {
     loaded.settings.role = userRole;
@@ -168,15 +146,12 @@ export async function initStore() {
   state = loaded;
   emit();
   initFirebaseSync();
-  // Если роль была применена, сохраняем состояние с новой ролью
   if (userRole && state.settings.role === userRole) {
-    // Увеличиваем rev, чтобы состояние сохранилось
     state.rev += 1;
     persist(true);
   }
 }
 
-// ---------- Геттеры и хук ----------
 export function getState(): AppState {
   return state;
 }
@@ -189,11 +164,11 @@ export function getActiveTournament(s: AppState): Tournament | null {
   return s.tournaments.find((t) => t.id === s.activeTournamentId) ?? null;
 }
 
-// ---------- Права доступа ----------
 type Perm = 'players' | 'structure' | 'live' | 'club';
 const ROLE_PERMS: Record<Role, Perm[]> = {
   admin: ['players', 'structure', 'live', 'club'],
   operator: ['live'],
+  player: [],
 };
 
 export function can(perm: Perm): boolean {
@@ -201,7 +176,6 @@ export function can(perm: Perm): boolean {
   return ROLE_PERMS[role].includes(perm);
 }
 
-// ---------- Ядро: коммит изменений ----------
 function commit(mutator: (draft: AppState) => void): boolean {
   const draft = JSON.parse(JSON.stringify(state)) as AppState;
   mutator(draft);
@@ -213,7 +187,6 @@ function commit(mutator: (draft: AppState) => void): boolean {
   return true;
 }
 
-// ---------- Вспомогательные функции (перенесены из оригинала) ----------
 function pushTicker(d: AppState, text: string, kind: TickerItem['kind']) {
   d.ticker = [{ id: uid(), time: Date.now(), text, kind }, ...d.ticker].slice(0, 10);
 }
@@ -267,6 +240,7 @@ function freshEntry(t: Tournament, playerId: string): Tournament['entries'][numb
     bonusLog: [],
     livePoints: 0,
     knockouts: 0,
+    stackHistory: [],
   };
 }
 
@@ -305,7 +279,6 @@ function applyLevelStart(t: Tournament, idx: number) {
 }
 
 function finalizeInner(d: AppState, t: Tournament, order: string[], auto: boolean) {
-  const stats = liveStats(t);
   order.forEach((pid, i) => {
     const e = t.entries.find((x) => x.playerId === pid);
     if (!e) return;
@@ -356,9 +329,7 @@ function firstFreeSeat(t: Tournament, _prefer: string | null): { tableId: string
   return null;
 }
 
-// ---------- actions (полностью такие же, как были) ----------
 export const actions = {
-  /* settings / roles */
   setRole(role: Role) {
     return commit((d) => { d.settings.role = role; });
   },
@@ -371,16 +342,30 @@ export const actions = {
     return commit((d) => { d.settings.screens = { ...d.settings.screens, ...patch }; });
   },
 
-  /* players master list */
-  addPlayer(data: { firstName: string; lastName: string; nickname: string; phone: string; avatarColor: string | null; avatarData?: string | null; joinedAt?: number; basePoints?: number }): string {
+  addPlayer(data: { firstName: string; lastName: string; nickname: string; phone: string; avatarColor: string | null; avatarData?: string | null; joinedAt?: number; basePoints?: number; userId?: string | null; notes?: string }): string {
     const id = uid();
     if (!can('players')) return id;
     commit((d) => {
-      d.players.push({ id, firstName: data.firstName, lastName: data.lastName, nickname: data.nickname, phone: data.phone, avatarColor: data.avatarColor, avatarData: data.avatarData ?? null, joinedAt: data.joinedAt ?? Date.now(), status: 'active', basePoints: data.basePoints ?? 0 });
+      d.players.push({
+        id,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        nickname: data.nickname,
+        phone: data.phone,
+        avatarColor: data.avatarColor,
+        avatarData: data.avatarData ?? null,
+        joinedAt: data.joinedAt ?? Date.now(),
+        status: 'active',
+        basePoints: data.basePoints ?? 0,
+        userId: data.userId ?? null,
+        notes: data.notes ?? '',
+        knockouts: 0,
+        rebuyCount: 0,
+      });
     });
     return id;
   },
-  updatePlayer(id: string, patch: Partial<Pick<Player, 'firstName' | 'lastName' | 'nickname' | 'phone' | 'avatarColor' | 'avatarData' | 'joinedAt'>>) {
+  updatePlayer(id: string, patch: Partial<Pick<Player, 'firstName' | 'lastName' | 'nickname' | 'phone' | 'avatarColor' | 'avatarData' | 'joinedAt' | 'notes'>>) {
     if (!can('players')) return false;
     return commit((d) => {
       const p = d.players.find((x) => x.id === id);
@@ -399,7 +384,6 @@ export const actions = {
     return commit((d) => { d.players = d.players.filter((x) => x.id !== id); });
   },
 
-  /* seasons */
   addSeason(name: string): string {
     const id = uid();
     if (!can('structure')) return id;
@@ -439,7 +423,6 @@ export const actions = {
     return commit((d) => { d.settings = { ...d.settings, ...patch }; });
   },
 
-  /* tournaments */
   createTournament(fields: Partial<Tournament>): string {
     const id = uid();
     if (!can('structure')) return id;
@@ -504,7 +487,6 @@ export const actions = {
     return commit((d) => { d.activeTournamentId = id; });
   },
 
-  /* registration */
   toggleEntry(tId: string, playerId: string) {
     if (!can('live')) return false;
     return commit((d) => {
@@ -548,7 +530,6 @@ export const actions = {
     });
   },
 
-  /* live control */
   start(tId: string) {
     if (!can('live')) return false;
     return commit((d) => {
@@ -565,6 +546,13 @@ export const actions = {
       t.breakReturnRemaining = null;
       if (lvl.isBreak) t.status = 'break';
       pushTicker(d, `${t.name}: старт! ${lvl.isBreak ? 'перерыв' : `${fmtInt(lvl.sb)}/${fmtInt(lvl.bb)}`}`, lvl.isBreak ? 'break' : 'level');
+      sendNotification({
+        title: `🏆 ${t.name} стартовал!`,
+        body: `Турнир начался! Уровень 1: ${fmtInt(lvl.sb)}/${fmtInt(lvl.bb)}`,
+        type: 'start',
+        tournamentId: t.id,
+        timestamp: Date.now(),
+      });
     });
   },
   pause(tId: string) {
@@ -608,10 +596,19 @@ export const actions = {
       idx += 1;
       const lvl = t.levels[idx];
       applyLevelStart(t, idx);
-      if (lvl.isBreak) {
-        pushTicker(d, `${t.name}: перерыв ${lvl.duration} мин`, 'break');
-      } else {
-        pushTicker(d, `${t.name}: уровень ${levelNumber(d, t, idx)} — ${fmtInt(lvl.sb)}/${fmtInt(lvl.bb)}${lvl.ante ? `, анте ${fmtInt(lvl.ante)}` : ''}`, 'level');
+      const levelNum = levelNumber(d, t, idx);
+      const message = lvl.isBreak
+        ? `${t.name}: перерыв ${lvl.duration} мин`
+        : `${t.name}: уровень ${levelNum} — ${fmtInt(lvl.sb)}/${fmtInt(lvl.bb)}${lvl.ante ? `, анте ${fmtInt(lvl.ante)}` : ''}`;
+      pushTicker(d, message, lvl.isBreak ? 'break' : 'level');
+      if (!lvl.isBreak) {
+        sendNotification({
+          title: `📢 Смена уровня!`,
+          body: `Уровень ${levelNum}: ${fmtInt(lvl.sb)}/${fmtInt(lvl.bb)}${lvl.ante ? `, анте ${fmtInt(lvl.ante)}` : ''}`,
+          type: 'level',
+          tournamentId: t.id,
+          timestamp: Date.now(),
+        });
       }
     });
   },
@@ -625,6 +622,13 @@ export const actions = {
       t.levelEndsAt = Date.now() + minutes * 60_000;
       t.pausedRemaining = null;
       pushTicker(d, `${t.name}: перерыв ${minutes} мин`, 'break');
+      sendNotification({
+        title: `☕ Перерыв!`,
+        body: `Объявлен перерыв на ${minutes} минут`,
+        type: 'break',
+        tournamentId: t.id,
+        timestamp: Date.now(),
+      });
     });
   },
   endBreak(tId: string) {
@@ -674,7 +678,6 @@ export const actions = {
     });
   },
 
-  /* players in tournament */
   eliminate(tId: string, playerId: string, byId: string | null) {
     if (!can('live')) return false;
     return commit((d) => {
@@ -701,6 +704,10 @@ export const actions = {
         if (killerEntry) {
           killerEntry.livePoints += t.knockoutPoints;
           killerEntry.knockouts += 1;
+          const killerPlayer = d.players.find((x) => x.id === byId);
+          if (killerPlayer) {
+            killerPlayer.knockouts = (killerPlayer.knockouts || 0) + 1;
+          }
           koNote = ` · ${fullName(killer!)} +${t.knockoutPoints} ${koWord(d.settings.language)}`;
         }
       }
@@ -711,6 +718,15 @@ export const actions = {
         `${p ? fullName(p) : 'Игрок'} выбывает${killer ? ` — выбил ${fullName(killer)}` : ''}${koNote} · в игре ${left}${left === 1 && canComeback ? ' · окно докупок открыто' : ''}`,
         'alert',
       );
+      if (byId && byId !== playerId && killer) {
+        sendNotification({
+          title: `💥 Выбивание!`,
+          body: `${fullName(killer)} выбивает ${p ? fullName(p) : 'игрока'}!`,
+          type: 'eliminate',
+          tournamentId: t.id,
+          timestamp: Date.now(),
+        });
+      }
       if (left === 1 && !canComeback) {
         const champ = t.entries.find((x) => !x.eliminated);
         if (champ) finalizeInner(d, t, [champ.playerId, ...t.entries.filter((x) => x.eliminated).sort((a, b) => (b.place ?? 0) - (a.place ?? 0)).map((x) => x.playerId)], true);
@@ -730,6 +746,9 @@ export const actions = {
       if (kind === 'rebuy') e.rebuys += 1;
       else e.addons += 1;
       const chips = kind === 'rebuy' ? t.rebuyChips : t.addonChips;
+      if (p) {
+        p.rebuyCount = (p.rebuyCount || 0) + 1;
+      }
       if (comeback) {
         revive(d, t, e, chips);
         pushTicker(d, `${p ? fullName(p) : 'Игрок'} возвращается в игру (${kind === 'rebuy' ? 'ребай' : 'адд-он'}) +${fmtInt(chips)}!`, 'alert');
@@ -749,6 +768,9 @@ export const actions = {
       const p = d.players.find((x) => x.id === playerId);
       e.entries += 1;
       revive(d, t, e, t.reentryChips);
+      if (p) {
+        p.rebuyCount = (p.rebuyCount || 0) + 1;
+      }
       pushTicker(d, `${p ? fullName(p) : 'Игрок'} — ре-ентри (вход №${e.entries}) +${fmtInt(t.reentryChips)}!`, 'alert');
     });
   },
@@ -767,7 +789,6 @@ export const actions = {
     });
   },
 
-  /* seating */
   seatRandom(tId: string, playerId: string | null) {
     if (!can('live')) return false;
     return commit((d) => {
@@ -894,7 +915,6 @@ export const actions = {
     });
   },
 
-  /* structure per tournament */
   addLevel(tId: string, isBreak: boolean) {
     if (!can('structure')) return false;
     return commit((d) => {
@@ -948,7 +968,6 @@ export const actions = {
     });
   },
 
-  /* points per tournament */
   setPointsGrid(tId: string, rows: PointsRow[]) {
     if (!can('structure')) return false;
     const t = state.tournaments.find((x) => x.id === tId);
@@ -979,7 +998,6 @@ export const actions = {
     });
   },
 
-  /* finalize */
   finalize(tId: string, order: string[]) {
     if (!can('live')) return false;
     return commit((d) => {
@@ -1004,7 +1022,6 @@ export const actions = {
     }
   },
 
-  /* ticker / backup */
   sendTicker(text: string) {
     if (!can('live')) return false;
     return commit((d) => pushTicker(d, text, 'custom'));
@@ -1020,7 +1037,6 @@ export const actions = {
   },
 };
 
-// ---------- Селекторы ----------
 export function remainingSeconds(s: AppState, t: Tournament | null): number | null {
   if (!t) return null;
   if (t.status === 'paused') return t.pausedRemaining;
@@ -1036,5 +1052,4 @@ export function useActive(): { s: AppState; t: Tournament | null } {
   return { s, t: getActiveTournament(s) };
 }
 
-// ---------- Переэкспорт утилит ----------
 export { balanceSuggestions, liveStats, fmtChips };
