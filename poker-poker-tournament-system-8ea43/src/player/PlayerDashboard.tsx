@@ -28,21 +28,13 @@ export function PlayerDashboard() {
 
   // Ждем загрузки данных из Firebase и появления игрока в списке
   useEffect(() => {
-    // Проверяем наличие игрока каждые 200мс, максимум 10 секунд
-    let attempts = 0;
-    const maxAttempts = 50;
+    // Проверяем наличие игрока - без таймера, просто реагируем на изменения s.players
+    const foundPlayer = s.players.find(p => p.userId === user?.id);
     
-    const checkPlayer = setInterval(() => {
-      attempts++;
-      const foundPlayer = s.players.find(p => p.userId === user?.id);
-      
-      if (foundPlayer || attempts >= maxAttempts) {
-        clearInterval(checkPlayer);
-        setIsLoading(false);
-      }
-    }, 200);
-    
-    return () => clearInterval(checkPlayer);
+    if (foundPlayer) {
+      setIsLoading(false);
+    }
+    // Если игрок не найден, остаемся в состоянии загрузки пока данные не обновятся через подписку Firebase
   }, [s.players.length, user?.id]);
 
   // Если данные еще загружаются

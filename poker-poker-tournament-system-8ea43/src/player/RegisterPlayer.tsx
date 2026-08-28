@@ -50,17 +50,18 @@ export function RegisterPlayer() {
       }
 
       // Обновляем игрока с userId после успешной регистрации
-      setTimeout(() => {
-        actions.updatePlayer(tempPlayerId, { userId: result.user.id });
-      }, 100);
+      // Ждем пока данные синхронизируются с Firebase
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await actions.updatePlayer(tempPlayerId, { userId: result.user.id });
+      
+      // Даем время на полную синхронизацию с Firebase перед редиректом
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       toast('Регистрация успешна!');
       setLoading(false);
       
-      // Даем время на синхронизацию с Firebase перед редиректом
-      setTimeout(() => {
-        window.location.href = '/#/player';
-      }, 500);
+      // Переходим в личный кабинет игрока
+      window.location.href = '/#/player';
     } catch (err: any) {
       console.error('Ошибка регистрации:', err);
       setError(err.message || 'Ошибка регистрации');
