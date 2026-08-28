@@ -120,10 +120,13 @@ async function loadFromFirebase(): Promise<AppState> {
       const clubTournaments: Tournament[] = [];
       for (const tId in tournamentsData) {
         const tor = tournamentsData[tId];
+        // Гарантируем наличие массивов entries и prizes
+        if (!tor.entries) tor.entries = [];
+        if (!tor.prizes) tor.prizes = [];
         clubTournaments.push({
           ...tor,
           id: tId,
-        });
+        } as Tournament);
       }
       // Merge турниров с локальным списком
       const existingIds = new Set(baseState.tournaments.map((t: Tournament) => t.id));
@@ -350,10 +353,13 @@ function initFirebaseSync() {
     const clubTournaments: Tournament[] = [];
     for (const tId in tournamentsData) {
       const tor = tournamentsData[tId];
+      // Гарантируем наличие массивов entries и prizes
+      if (!tor.entries) tor.entries = [];
+      if (!tor.prizes) tor.prizes = [];
       clubTournaments.push({
         ...tor,
         id: tId,
-      });
+      } as Tournament);
     }
     // Синхронизируем турниры с локальным состоянием
     commit((d) => {
