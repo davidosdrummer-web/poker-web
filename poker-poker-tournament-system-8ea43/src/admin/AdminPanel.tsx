@@ -1,267 +1,252 @@
-import { useEffect, useState } from 'react';
-import { actions, can, getActiveTournament, getState, remainingSeconds, useApp } from '../lib/store';
-import { auth, useAuth } from '../lib/auth';
-import { makeT } from '../lib/i18n';
-import { fmtClock } from '../lib/utils';
-import { Badge, ClubLogo, Icon, KeyCap, Modal, ToastHost } from '../components/ui';
-import { LiveTab } from './LiveTab';
-import { TournamentsTab } from './TournamentsTab';
-import { PlayersTab } from './PlayersTab';
-import { LeaderboardTab } from './LeaderboardTab';
-import { ScreensTab, SettingsTab } from './ScreensSettingsTabs';
-import { AccountModal, AuthGate } from './AuthGate';
-import { ThemeToggle } from '../components/ThemeToggle';
+import React, { useState, useEffect } from 'react';
+import { useStore } from '../lib/store';
 
-export type TabId = 'live' | 'tournaments' | 'players' | 'board' | 'screens' | 'settings';
-
-const HK_ORDER: Record<string, number> = { live: 1, tournaments: 2, players: 3, board: 4, screens: 5, settings: 6 };
-
-export function AdminPanel() {
-  const s = useApp();
-  const t = makeT(s.settings.language);
-  const user = useAuth();
-  const [tab, setTab] = useState<TabId>('live');
-  const [editorId, setEditorId] = useState<string | null>(null);
-  const [editorSection, setEditorSection] = useState('params');
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [clock, setClock] = useState('');
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+const AdminPanel = () => {
+  const { tournaments, subscribeToTournaments, assignSeat, eliminate, rebuyStack, addAddon, setTournamentStatus } = useStore();
+  const [selectedTournament, setSelectedTournament] = useState(null);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const unsubscribe = subscribeToTournaments();
+    return unsubscribe;
   }, []);
 
-  const active = getActiveTournament(s);
-  const remaining = remainingSeconds(s, active);
-  const live = active && (active.status === 'running' || active.status === 'paused' || active.status === 'break');
-
-  useEffect(() => {
-    if (user && s.settings.role !== user.role) actions.setRole(user.role);
-  }, [user?.id, user?.role]);
-
-  useEffect(() => {
-    const f = () => setClock(new Date().toLocaleTimeString(s.settings.language === 'ru' ? 'ru-RU' : 'en-GB', { hour: '2-digit', minute: '2-digit' }));
-    f();
-    const id = window.setInterval(f, 10_000);
-    return () => window.clearInterval(id);
-  }, [s.settings.language]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      const st = getState();
-      const tor = getActiveTournament(st);
-      if (!tor) return;
-      if ((tor.status === 'running' || tor.status === 'break') && tor.levelEndsAt && tor.levelEndsAt <= Date.now()) {
-        if (tor.status === 'break') actions.endBreak(tor.id);
-        else actions.nextLevel(tor.id);
-      }
-      actions.checkAutoFinish(tor.id);
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement;
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const st = getState();
-      const tor = getActiveTournament(st);
-      const key = e.key.toLowerCase();
-      if (e.key === ' ') {
-        if (tor && can('live')) {
-          e.preventDefault();
-          if (tor.status === 'running' || tor.status === 'break') actions.pause(tor.id);
-          else if (tor.status === 'paused') actions.resume(tor.id);
-        }
-      } else if (key === 'n' && tor && can('live')) {
-        e.preventDefault();
-        actions.nextLevel(tor.id);
-      } else if (key === 'b' && tor && can('live')) {
-        e.preventDefault();
-        if (tor.status === 'break') actions.endBreak(tor.id);
-        else if (tor.status === 'running') actions.breakNow(tor.id, 10);
-      } else if (key === 'q') {
-        e.preventDefault();
-        setHelpOpen((v) => !v);
-      } else if (/^[1-6]$/.test(e.key)) {
-        const order: TabId[] = ['live', 'tournaments', 'players', 'board', 'screens', 'settings'];
-        const target = order[Number(e.key) - 1];
-        if (target) {
-          setTab(target);
-          if (target !== 'tournaments') {
-            setEditorId(null);
-          }
-        }
-      }
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, []);
-
-  const openEditor = (id: string, section?: string) => {
-    setTab('tournaments');
-    setEditorId(id || null);
-    setEditorSection(section || 'params');
+  const handleAssignSeat = async (playerId, tableId, seat) => {
+    if (selectedTournament) {
+      await assignSeat(selectedTournament.id, playerId, tableId, seat);
+    }
   };
 
-  const tabs: { id: TabId; icon: string; label: string; count?: string; alert?: boolean }[] = [
-    { id: 'live', icon: 'timer', label: t('nav.live'), count: live && remaining != null ? fmtClock(remaining) : undefined },
-    { id: 'tournaments', icon: 'trophy', label: t('nav.tournaments'), count: String(s.tournaments.length) },
-    { id: 'players', icon: 'users', label: t('nav.players'), count: String(s.players.length) },
-    { id: 'board', icon: 'hand', label: t('nav.board') },
-    { id: 'screens', icon: 'screen', label: t('nav.screens') },
-    { id: 'settings', icon: 'settings', label: t('nav.settings') },
-  ];
-
-  const statusMeta: Record<string, { label: string; tone: 'gold' | 'green' | 'red' | 'info' | 'neutral' }> = {
-    scheduled: { label: t('status.scheduled'), tone: 'neutral' },
-    registration: { label: t('status.registration'), tone: 'info' },
-    running: { label: t('status.running'), tone: 'green' },
-    paused: { label: t('status.paused'), tone: 'red' },
-    break: { label: t('status.break'), tone: 'gold' },
-    finished: { label: t('status.finished'), tone: 'neutral' },
+  const handleEliminate = async (playerId, eliminatedBy) => {
+    if (selectedTournament) {
+      await eliminate(selectedTournament.id, playerId, eliminatedBy);
+    }
   };
 
-  if (!user) {
-    return (
-      <>
-        <AuthGate />
-        <ToastHost />
-      </>
-    );
-  }
+  const handleRebuy = async (playerId) => {
+    if (selectedTournament) {
+      await rebuyStack(selectedTournament.id, playerId);
+    }
+  };
 
-  const sidebarContent = (
-    <>
-      <div className="px-4 py-4 flex items-center gap-2.5 border-b border-line-soft">
-        <ClubLogo logo={s.settings.logo} size={34} accent={s.settings.accent} />
-        <div className="min-w-0">
-          <div className="font-display text-lg leading-none text-cream-100 truncate">{s.settings.clubName}</div>
-          <div className="text-[9px] uppercase tracking-[0.2em] text-gold-500 font-bold mt-0.5">{t('app.tagline')}</div>
-        </div>
-      </div>
-      <nav className="flex-1 p-2.5 flex flex-col gap-1 overflow-y-auto">
-        {tabs.map((tb) => (
-          <button
-            key={tb.id}
-            onClick={() => { setTab(tb.id); if (tb.id !== 'tournaments') setEditorId(null); }}
-            className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${tab === tb.id ? 'bg-gold-400/12 text-gold-300 border border-gold-400/25' : 'text-cream-500 hover:text-cream-100 hover:bg-felt-800 border border-transparent'}`}
+  const handleAddAddon = async (playerId) => {
+    if (selectedTournament) {
+      await addAddon(selectedTournament.id, playerId);
+    }
+  };
+
+  const handleSetStatus = async (status) => {
+    if (selectedTournament) {
+      await setTournamentStatus(selectedTournament.id, status);
+    }
+  };
+
+  const formatTime = (date) => {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
+
+  const renderTournamentList = () => (
+    <div className="p-6">
+      <h2 className="text-2xl font-bold mb-6">Турниры</h2>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tournaments.map((tournament) => (
+          <div 
+            key={tournament.id}
+            className="bg-white rounded-lg shadow p-6 cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => setSelectedTournament(tournament)}
           >
-            <Icon name={tb.icon} size={17} />
-            <span className="flex-1 text-left">{tb.label}</span>
-            {tb.alert && <span className="w-1.5 h-1.5 rounded-full bg-gold-400 anim-pulse-soft" />}
-            {tb.count && <span className={`text-[10px] num font-bold ${tab === tb.id ? 'text-gold-400' : 'text-cream-700 group-hover:text-cream-500'}`}>{tb.count}</span>}
-            <KeyCap>{HK_ORDER[tb.id]}</KeyCap>
-          </button>
+            <h3 className="text-xl font-semibold mb-2">{tournament.name}</h3>
+            <p className="text-gray-600 mb-2">{tournament.description}</p>
+            <p>Участников: {tournament.registeredPlayers.length}</p>
+            <p>Статус: {tournament.status}</p>
+            <p>Призовой фонд: {tournament.totalPrizePool} ₽</p>
+          </div>
         ))}
-      </nav>
-      <div className="p-3 border-t border-line-soft">
-        <button onClick={() => setHelpOpen(true)} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-cream-500 hover:text-cream-100 hover:bg-felt-800 transition-colors">
-          <Icon name="keyboard" size={15} /> {t('hotkeys')} <span className="flex-1" /> <KeyCap>Q</KeyCap>
-        </button>
-        <div className="flex items-center gap-2 px-3 pt-2 text-[10px] text-cream-700 num">
-          <span className="w-1.5 h-1.5 rounded-full bg-win anim-pulse-soft" /> {t('sync')} · rev {s.rev}
+      </div>
+    </div>
+  );
+
+  const renderTournamentDetail = () => {
+    if (!selectedTournament) return null;
+
+    const registeredPlayers = selectedTournament.registeredPlayers;
+    const playersWithDetails = registeredPlayers.map(playerId => {
+      const player = selectedTournament.players[playerId];
+      return {
+        id: playerId,
+        name: player?.name || 'Неизвестный',
+        stack: player?.stack || 0,
+        seat: player?.seat,
+        tableId: player?.tableId,
+        rebuys: player?.rebuys || 0,
+        addons: player?.addons || 0,
+        eliminated: player?.eliminated || false,
+        eliminationPlace: player?.eliminationPlace,
+        eliminatedBy: player?.eliminatedBy
+      };
+    });
+
+    return (
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold">{selectedTournament.name}</h2>
+          <button 
+            onClick={() => setSelectedTournament(null)}
+            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+          >
+            Назад
+          </button>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="text-xl font-semibold mb-4">Управление турниром</h3>
+          <div className="flex space-x-4">
+            <button 
+              onClick={() => handleSetStatus('inProgress')}
+              disabled={selectedTournament.status !== 'registration'}
+              className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
+            >
+              Начать турнир
+            </button>
+            
+            <button 
+              onClick={() => handleSetStatus('completed')}
+              disabled={selectedTournament.status !== 'inProgress'}
+              className="bg-red-500 text-white px-4 py-2 rounded disabled:opacity-50"
+            >
+              Завершить турнир
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Игрок
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Стек
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Стол / Место
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ребай / Аддон
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Статус
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Действия
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {playersWithDetails.map((player) => (
+                <tr key={player.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{player.name}</div>
+                    <div className="text-sm text-gray-500">{player.id}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{player.stack}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {player.tableId ? `${player.tableId} / ${player.seat}` : '-'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      Р: {player.rebuys}, А: {player.addons}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      player.eliminated 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {player.eliminated ? 'Выбыл' : 'В игре'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    {!player.eliminated && (
+                      <>
+                        <button 
+                          onClick={() => {
+                            const tableId = prompt('Введите ID стола:');
+                            const seat = parseInt(prompt('Введите номер места:') || '0');
+                            if (tableId && !isNaN(seat)) {
+                              handleAssignSeat(player.id, tableId, seat);
+                            }
+                          }}
+                          className="text-blue-600 hover:text-blue-900 mr-2"
+                        >
+                          Назначить
+                        </button>
+                        
+                        <button 
+                          onClick={() => {
+                            const eliminatedBy = prompt('Введите ID игрока, который выбил:');
+                            if (eliminatedBy) {
+                              handleEliminate(player.id, eliminatedBy);
+                            }
+                          }}
+                          className="text-red-600 hover:text-red-900 mr-2"
+                        >
+                          Выбить
+                        </button>
+                        
+                        <button 
+                          onClick={() => handleRebuy(player.id)}
+                          className="text-yellow-600 hover:text-yellow-900 mr-2"
+                        >
+                          Ребай
+                        </button>
+                        
+                        <button 
+                          onClick={() => handleAddAddon(player.id)}
+                          className="text-purple-600 hover:text-purple-900"
+                        >
+                          Аддон
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
-    </>
-  );
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-felt flex">
-      {isMobile ? (
-        <>
-          <button className="fixed top-4 left-4 z-50 p-2 rounded-lg bg-felt-800 border border-line-soft text-cream-100 md:hidden" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            <Icon name="menu" size={24} />
-          </button>
-          {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/70" onClick={() => setSidebarOpen(false)} />}
-          <aside className={`fixed inset-y-0 left-0 z-50 w-[218px] border-r border-line-soft bg-felt-950/95 backdrop-blur flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-            {sidebarContent}
-          </aside>
-        </>
-      ) : (
-        <aside className="w-[218px] shrink-0 border-r border-line-soft bg-felt-950/70 backdrop-blur flex flex-col sticky top-0 h-screen no-print">
-          {sidebarContent}
-        </aside>
-      )}
-
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-40 border-b border-line-soft bg-felt-950/85 backdrop-blur px-5 py-3 flex items-center gap-4 no-print">
-          <div className="min-w-0 flex-1">
-            {active ? (
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-display text-xl text-cream-100 truncate">{active.name}</span>
-                <Badge tone={statusMeta[active.status].tone}>
-                  {active.status === 'running' && <span className="w-1.5 h-1.5 rounded-full bg-win anim-pulse-soft" />}
-                  {statusMeta[active.status].label}
-                </Badge>
-                {live && remaining != null && (
-                  <span className={`font-display text-xl num ${remaining <= 30 && active.status === 'running' ? 'text-loss anim-blink' : 'text-gold-300'}`}>{fmtClock(remaining)}</span>
-                )}
-              </div>
-            ) : (
-              <span className="font-display text-xl text-cream-500">{t('noActiveTournament')}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <ThemeToggle />
-            <div className="flex items-center gap-1.5 rounded-lg border border-line bg-felt-900 pl-1.5 pr-1 py-1">
-              <div className="w-7 h-7 rounded-md bg-gold-400/15 border border-gold-400/30 flex items-center justify-center font-display text-base text-gold-300 uppercase">
-                {user.username.slice(0, 1)}
-              </div>
-              <button onClick={() => setAccountOpen(true)} className="text-left leading-tight px-1 group" title={t('account')}>
-                <div className="text-xs font-bold text-cream-100 group-hover:text-gold-300 transition-colors max-w-[110px] truncate">{user.username}</div>
-                <div className="text-[9px] uppercase tracking-wider text-cream-700 font-bold">{t(`role.${user.role}`)}</div>
-              </button>
-              <button onClick={async () => { await auth.logout(); }} className="p-1.5 rounded-md text-cream-500 hover:text-loss hover:bg-loss/10 transition-colors" title={t('logout')}>
-                <Icon name="x" size={14} />
-              </button>
+    <div className="min-h-screen bg-gray-100">
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <h1 className="text-xl font-bold">Панель администратора</h1>
             </div>
-            <span className="font-display text-xl num text-cream-300">{clock}</span>
           </div>
-        </header>
+        </div>
+      </nav>
 
-        <main className="flex-1 p-5 suit-pattern">
-          <div className="anim-fade-in">
-            {tab === 'live' && <LiveTab onOpenEditor={openEditor} />}
-            {tab === 'tournaments' && (
-              <TournamentsTab editorId={editorId} section={editorSection} onOpenEditor={openEditor} onCloseEditor={() => setEditorId(null)} onGoLive={() => { setEditorId(null); setTab('live'); }} />
-            )}
-            {tab === 'players' && <PlayersTab />}
-            {tab === 'board' && <LeaderboardTab />}
-            {tab === 'screens' && <ScreensTab />}
-            {tab === 'settings' && <SettingsTab />}
-          </div>
-        </main>
-      </div>
-
-      {helpOpen && (
-        <Modal title={t('hotkeys')} onClose={() => setHelpOpen(false)}>
-          <div className="grid gap-2.5 text-sm text-cream-300">
-            <HotkeyRow k="Space" label={t('hk.space')} />
-            <HotkeyRow k="N" label={t('hk.n')} />
-            <HotkeyRow k="B" label={t('hk.b')} />
-            <HotkeyRow k="E" label={`${t('hk.e')} (${t('nav.live')})`} />
-            <HotkeyRow k="1–6" label={t('hk.digits')} />
-            <HotkeyRow k="Q" label={t('hk.q')} />
-          </div>
-        </Modal>
-      )}
-      {accountOpen && <AccountModal user={user} onClose={() => setAccountOpen(false)} />}
-      <ToastHost />
+      {selectedTournament ? renderTournamentDetail() : renderTournamentList()}
     </div>
   );
-}
+};
 
-function HotkeyRow({ k, label }: { k: string; label: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <KeyCap>{k}</KeyCap>
-      <span>{label}</span>
-    </div>
-  );
-}
+export default AdminPanel;
