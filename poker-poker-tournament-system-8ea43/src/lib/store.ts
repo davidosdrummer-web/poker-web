@@ -71,6 +71,8 @@ function subscribe(l: () => void): () => void {
 function initPlayersSubscription() {
   const unsubscribe = subscribeToPlayers((players) => {
     allPlayers = players;
+    // Emit event to trigger re-render when players change
+    emit();
     playerListeners.forEach((l) => l(players));
   });
   return unsubscribe;

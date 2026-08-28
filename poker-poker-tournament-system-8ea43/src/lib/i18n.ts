@@ -433,6 +433,8 @@ const ru: Record<string, string> = {
   'addOperator': 'Создать оператора',
   'operatorAdded': 'Оператор создан',
   'operatorDeleted': 'Оператор удалён',
+  
+  'loading': 'Загрузка…',
   'auth.noRights': 'Недостаточно прав',
   'auth.noUser': 'Аккаунт не найден',
   'auth.cannotDeleteSelf': 'Нельзя удалить свой аккаунт',
