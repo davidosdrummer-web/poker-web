@@ -77,7 +77,42 @@ async function loadFromFirebase(): Promise<AppState> {
       }
     }
     
-    // Для игроков с ролью 'player' загружаем профиль из players_index
+    // Загружаем всех игроков из players_index (общий список клуба)
+    const allPlayersRef = ref(db, 'players_index');
+    const allPlayersSnapshot = await get(allPlayersRef);
+    if (allPlayersSnapshot.exists()) {
+      const allPlayersData = allPlayersSnapshot.val();
+      const clubPlayers: Player[] = [];
+      for (const playerId in allPlayersData) {
+        const profile = allPlayersData[playerId];
+        clubPlayers.push({
+          id: uid(),
+          firstName: profile.firstName || '',
+          lastName: profile.lastName || '',
+          nickname: profile.nickname || '',
+          phone: profile.phone || '',
+          avatarColor: profile.avatarColor || null,
+          avatarData: null,
+          joinedAt: profile.joinedAt || Date.now(),
+          status: profile.status || 'active',
+          basePoints: 0,
+          userId: playerId,
+          knockouts: 0,
+          rebuyCount: 0,
+          notes: '',
+        });
+      }
+      //Merge клубных игроков с локальным списком
+      const existingUserIds = new Set(baseState.players.map((p: Player) => p.userId));
+      for (const cp of clubPlayers) {
+        if (!existingUserIds.has(cp.userId)) {
+          baseState.players.push(cp);
+          existingUserIds.add(cp.userId);
+        }
+      }
+    }
+    
+    // Для игроков с ролью 'player' также загружаем профиль из players_index
     const playerProfileRef = ref(db, `players_index/${userId}`);
     const playerSnapshot = await get(playerProfileRef);
     if (playerSnapshot.exists()) {
@@ -227,6 +262,43 @@ function initFirebaseSync() {
       }
       emit();
     }
+  });
+  
+  // Подписываемся на изменения общего списка игроков клуба
+  const allPlayersRef = ref(db, 'players_index');
+  onValue(allPlayersRef, (snapshot) => {
+    if (!snapshot.exists()) return;
+    const allPlayersData = snapshot.val();
+    const clubPlayers: Player[] = [];
+    for (const playerId in allPlayersData) {
+      const profile = allPlayersData[playerId];
+      clubPlayers.push({
+        id: uid(),
+        firstName: profile.firstName || '',
+        lastName: profile.lastName || '',
+        nickname: profile.nickname || '',
+        phone: profile.phone || '',
+        avatarColor: profile.avatarColor || null,
+        avatarData: null,
+        joinedAt: profile.joinedAt || Date.now(),
+        status: profile.status || 'active',
+        basePoints: 0,
+        userId: playerId,
+        knockouts: 0,
+        rebuyCount: 0,
+        notes: '',
+      });
+    }
+    // Синхронизируем клубных игроков с локальным состоянием
+    commit((d) => {
+      const existingUserIds = new Set(d.players.map((p: Player) => p.userId));
+      for (const cp of clubPlayers) {
+        if (!existingUserIds.has(cp.userId)) {
+          d.players.push(cp);
+          existingUserIds.add(cp.userId);
+        }
+      }
+    });
   });
   
   // Дополнительно подписываемся на изменения профиля игрока

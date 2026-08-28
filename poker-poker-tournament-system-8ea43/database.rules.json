@@ -16,22 +16,24 @@
     "players_index": {
       // Любой авторизованный пользователь может читать список игроков
       ".read": "auth != null",
+      ".write": "auth != null",
       "$playerId": {
         // Игрок может читать свой профиль
         ".read": "auth != null",
         // Игрок может создавать/обновлять свой профиль при регистрации
-        ".write": "auth != null && auth.uid === $playerId",
-        // Админ может управлять всеми профилями
+        ".write": "auth != null && (auth.uid === $playerId || root.child('users').child(auth.uid).child('role').val() === 'admin')",
         ".indexOn": ["status"]
       }
     },
     "games": {
       // Читать игры могут все авторизованные
       ".read": "auth != null",
-      "$gameId": {
-        // Писать могут только админы и операторы
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'operator')"
-      }
+      ".write": "auth != null"
+    },
+    "tournaments": {
+      // Читать турниры могут все авторизованные
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }
