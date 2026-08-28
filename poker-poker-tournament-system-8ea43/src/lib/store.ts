@@ -83,7 +83,7 @@ async function loadFromFirebase(): Promise<AppState> {
     if (playerSnapshot.exists()) {
       const profile = playerSnapshot.val();
       // Находим или создаем игрока в локальном списке
-      const existingPlayer = baseState.players.find(p => p.userId === userId);
+      const existingPlayer = baseState.players.find((p: Player) => p.userId === userId);
       if (!existingPlayer) {
         // Добавляем игрока из профиля в список игроков
         baseState.players.push({
@@ -147,6 +147,59 @@ function persist(broadcast: boolean) {
 
 let firebaseUnsubscribe: (() => void) | null = null;
 
+async function syncPlayerProfile() {
+  const userId = getUserId();
+  if (!userId) return;
+  
+  // Для игроков с ролью 'player' загружаем профиль из players_index
+  try {
+    const playerProfileRef = ref(db, `players_index/${userId}`);
+    const playerSnapshot = await get(playerProfileRef);
+    if (playerSnapshot.exists()) {
+      const profile = playerSnapshot.val();
+      // Находим или создаем игрока в локальном списке
+      const existingPlayer = state.players.find((p: Player) => p.userId === userId);
+      if (!existingPlayer) {
+        // Добавляем игрока из профиля в список игроков
+        commit((d) => {
+          d.players.push({
+            id: uid(),
+            firstName: profile.firstName || '',
+            lastName: profile.lastName || '',
+            nickname: profile.nickname || '',
+            phone: profile.phone || '',
+            avatarColor: profile.avatarColor || null,
+            avatarData: null,
+            joinedAt: profile.joinedAt || Date.now(),
+            status: profile.status || 'active',
+            basePoints: 0,
+            userId: userId,
+            knockouts: 0,
+            rebuyCount: 0,
+            notes: '',
+          });
+        });
+      } else {
+        // Обновляем существующего игрока
+        commit((d) => {
+          const p = d.players.find((x) => x.userId === userId);
+          if (p) {
+            p.firstName = profile.firstName || p.firstName;
+            p.lastName = profile.lastName || p.lastName;
+            p.nickname = profile.nickname || p.nickname;
+            p.phone = profile.phone || p.phone;
+            p.avatarColor = profile.avatarColor ?? p.avatarColor;
+            p.joinedAt = profile.joinedAt || p.joinedAt;
+            p.status = profile.status || p.status;
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to sync player profile', e);
+  }
+}
+
 function initFirebaseSync() {
   const userId = getUserId();
   if (!userId) {
@@ -174,6 +227,13 @@ function initFirebaseSync() {
       }
       emit();
     }
+  });
+  
+  // Дополнительно подписываемся на изменения профиля игрока
+  const playerProfileRef = ref(db, `players_index/${userId}`);
+  onValue(playerProfileRef, (snapshot) => {
+    if (!snapshot.exists()) return;
+    syncPlayerProfile();
   });
 }
 

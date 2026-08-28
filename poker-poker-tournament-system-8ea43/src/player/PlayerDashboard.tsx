@@ -18,7 +18,7 @@ export function PlayerDashboard() {
 
   // Находим игрока в базе клуба по userId
   const player = s.players.find(p => p.userId === user?.id);
-  const rows = leaderboardRows(s.players, s.tournaments, null);
+  const rows = player ? leaderboardRows(s.players, s.tournaments, null) : [];
   const rank = player ? rankMap(rows).get(player.id) : null;
   const playerStats = player ? rows.find(r => r.playerId === player.id) : null;
 
