@@ -1,268 +1,382 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '../lib/auth';
-import { useApp, actions, can } from '../lib/store';
-import { makeT } from '../lib/i18n';
-import { fmtChips, fmtDate, fullName, leaderboardRows, rankMap } from '../lib/utils';
-import { Avatar, Badge, Btn, Icon, ToastHost, toast } from '../components/ui';
-import { ThemeToggle } from '../components/ThemeToggle';
-import { RatingChart } from '../components/RatingChart';
-import { Achievements } from '../components/Achievements';
-import { auth } from '../lib/auth';
-import type { Tournament } from '../lib/types';
+import React, { useState, useEffect } from 'react';
+import { useStore } from '../lib/store';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-export function PlayerDashboard() {
-  const s = useApp();
-  const t = makeT(s.settings.language);
-  const user = useAuth();
-  const [activeTab, setActiveTab] = useState<'rating' | 'history' | 'tournaments' | 'achievements'>('rating');
+const PlayerDashboard = () => {
+  const { tournaments, currentUser, subscribeToTournaments } = useStore();
+  const [activeTab, setActiveTab] = useState('tournaments');
+  const [selectedTournament, setSelectedTournament] = useState(null);
 
-  // Находим игрока в базе клуба по userId
-  const player = s.players.find(p => p.userId === user?.id);
-  const rows = leaderboardRows(s.players, s.tournaments, null);
-  const rank = player ? rankMap(rows).get(player.id) : null;
-  const playerStats = player ? rows.find(r => r.playerId === player.id) : null;
+  useEffect(() => {
+    const unsubscribe = subscribeToTournaments();
+    return unsubscribe;
+  }, []);
 
-  const history = s.tournaments
-    .filter(tor => tor.status === 'finished' && tor.entries.some(e => e.playerId === player?.id))
-    .sort((a, b) => b.date - a.date);
+  const handleRegister = async (tournamentId) => {
+    await useStore.getState().toggleEntry(tournamentId);
+  };
 
-  // Доступные для регистрации турниры
-  const availableTournaments = s.tournaments
-    .filter(tor => (tor.status === 'scheduled' || tor.status === 'registration') && !tor.entries.some(e => e.playerId === player?.id))
-    .sort((a, b) => a.date - b.date);
+  const formatTime = (date) => {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
 
-  // Зарегистрированные турниры
-  const registeredTournaments = s.tournaments
-    .filter(tor => (tor.status === 'scheduled' || tor.status === 'registration') && tor.entries.some(e => e.playerId === player?.id))
-    .sort((a, b) => a.date - b.date);
+  const getStatusMessage = (tournament, player) => {
+    if (player?.eliminated) {
+      return `Выбыл на ${player.eliminationPlace} месте`;
+    }
+    
+    if (tournament.status === 'inProgress' && !player?.eliminated) {
+      return `В игре - стек: ${player?.stack || 0}`;
+    }
+    
+    if (tournament.status === 'registration') {
+      return 'Регистрация открыта';
+    }
+    
+    return 'Завершён';
+  };
 
-  // Если игрок не найден в базе клуба
-  if (!player) {
-    return (
-      <div className="min-h-screen bg-felt suit-pattern flex flex-col items-center justify-center p-4">
-        <Icon name="users" size={64} className="text-gold-400 opacity-60" />
-        <h2 className="font-display text-3xl text-cream-100 mt-4">{t('player.notFound')}</h2>
-        <p className="text-sm text-cream-500 mt-2 text-center max-w-md">{t('player.linkAccount')}</p>
-        <Btn variant="gold" size="lg" icon="link" className="mt-6" onClick={() => window.location.href = '/'}>
-          {t('player.linkAccount')}
-        </Btn>
+  const renderProfileTab = () => (
+    <div className="p-6">
+      <h2 className="text-2xl font-bold mb-6">Профиль</h2>
+      
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h3 className="text-xl font-semibold mb-4">Информация</h3>
+        <p>Имя: {currentUser?.name}</p>
+        <p>ID: {currentUser?.id}</p>
       </div>
-    );
-  }
 
-  // Выход
-  const handleLogout = async () => {
-    await auth.logout();
-  };
-
-  // Запись на турнир
-  const handleRegister = (tournamentId: string) => {
-    if (!player) return;
-    actions.toggleEntry(tournamentId, player.id);
-    toast(t('registered'));
-  };
-
-  // Отмена записи
-  const handleUnregister = (tournamentId: string) => {
-    if (!player) return;
-    actions.toggleEntry(tournamentId, player.id);
-    toast(t('unregistered'), 'warn');
-  };
-
-  return (
-    <div className="min-h-screen bg-felt suit-pattern">
-      {/* Шапка */}
-      <header className="border-b border-line-soft bg-felt-950/85 backdrop-blur px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Avatar
-            name={fullName(player)}
-            color={player.avatarColor}
-            avatarData={player.avatarData ?? null}
-            size={40}
-          />
-          <div>
-            <div className="font-display text-lg text-cream-100">{fullName(player)}</div>
-            <div className="text-xs text-cream-500">«{player.nickname}»</div>
-          </div>
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-xl font-semibold mb-4">Рейтинг</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={[
+              { date: 'Янв', rating: 50 },
+              { date: 'Фев', rating: 55 },
+              { date: 'Мар', rating: 60 },
+              { date: 'Апр', rating: 58 },
+              { date: 'Май', rating: 62 }
+            ]}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="rating" stroke="#8884d8" activeDot={{ r: 8 }} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Badge tone="gold">#{rank || '—'}</Badge>
-          <button
-            onClick={handleLogout}
-            className="p-1.5 rounded-md text-cream-500 hover:text-loss hover:bg-loss/10 transition-colors"
-            title={t('logout')}
-          >
-            <Icon name="x" size={18} />
-          </button>
-        </div>
-      </header>
+      </div>
+    </div>
+  );
 
-      {/* Основной контент */}
-      <main className="max-w-4xl mx-auto p-4">
-        {/* Краткая статистика */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="card p-4 text-center">
-            <div className="text-[10px] uppercase text-cream-500">{t('player.points')}</div>
-            <div className="font-display text-3xl num text-gold-300">{playerStats?.points || 0}</div>
-          </div>
-          <div className="card p-4 text-center">
-            <div className="text-[10px] uppercase text-cream-500">{t('player.played')}</div>
-            <div className="font-display text-3xl num text-cream-100">{playerStats?.played || 0}</div>
-          </div>
-          <div className="card p-4 text-center">
-            <div className="text-[10px] uppercase text-cream-500">{t('player.wins')}</div>
-            <div className="font-display text-3xl num text-win">{playerStats?.wins || 0}</div>
-          </div>
-        </div>
-
-        {/* Дополнительная статистика */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="card p-3 text-center">
-            <div className="text-[9px] uppercase text-cream-500">{t('top3')}</div>
-            <div className="font-display text-xl num text-cream-100">{playerStats?.top3 || 0}</div>
-          </div>
-          <div className="card p-3 text-center">
-            <div className="text-[9px] uppercase text-cream-500">{t('finals')}</div>
-            <div className="font-display text-xl num text-cream-100">{playerStats?.finals || 0}</div>
-          </div>
-          <div className="card p-3 text-center">
-            <div className="text-[9px] uppercase text-cream-500">{t('best')}</div>
-            <div className="font-display text-xl num text-gold-300">{playerStats?.best || 0}</div>
-          </div>
-        </div>
-
-        {/* Вкладки */}
-        <div className="flex gap-1 bg-felt-900 border border-line rounded-lg p-1 mb-4">
-          {(['rating', 'tournaments', 'history', 'achievements'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-colors ${
-                activeTab === tab
-                  ? 'bg-gold-400 text-felt-950'
-                  : 'text-cream-500 hover:text-cream-100'
-              }`}
+  const renderTournamentsTab = () => (
+    <div className="p-6">
+      <h2 className="text-2xl font-bold mb-6">Турниры</h2>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tournaments.map((tournament) => {
+          const isRegistered = tournament.registeredPlayers.includes(currentUser?.id);
+          const player = tournament.players[currentUser?.id];
+          
+          return (
+            <div 
+              key={tournament.id}
+              className="bg-white rounded-lg shadow p-6 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setSelectedTournament(tournament)}
             >
-              {tab === 'rating' ? t('player.rating') : tab === 'tournaments' ? 'Турниры' : tab === 'history' ? t('player.history') : t('achievements') || 'Достижения'}
-            </button>
-          ))}
-        </div>
+              <h3 className="text-xl font-semibold mb-2">{tournament.name}</h3>
+              <p className="text-gray-600 mb-2">{tournament.description}</p>
+              
+              <div className="mb-4">
+                <p>Старт: {formatTime(tournament.startDate)}</p>
+                <p>Стек: {tournament.startingStack}</p>
+                <p>Ребай: {tournament.rebuyCost}</p>
+                <p>Аддон: {tournament.addonCost}</p>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className={`px-2 py-1 rounded text-sm ${
+                  player ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {getStatusMessage(tournament, player)}
+                </span>
+                
+                {!isRegistered && tournament.status === 'registration' && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRegister(tournament.id);
+                    }}
+                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+                  >
+                    Буду участвовать
+                  </button>
+                )}
+                
+                {isRegistered && tournament.status === 'registration' && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRegister(tournament.id);
+                    }}
+                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                  >
+                    Отменить регистрацию
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 
-        {/* Контент вкладок */}
-        {activeTab === 'rating' && (
-          <div className="card p-4">
-            <RatingChart playerId={player.id} height={300} />
+  const renderHistoryTab = () => (
+    <div className="p-6">
+      <h2 className="text-2xl font-bold mb-6">История</h2>
+      
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Турнир
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Дата
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Место
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Приз
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {tournaments
+              .filter(t => t.status === 'completed')
+              .map(tournament => {
+                const player = tournament.players[currentUser?.id];
+                if (!player || !player.eliminationPlace) return null;
+                
+                return (
+                  <tr key={tournament.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{tournament.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{formatTime(tournament.startDate)}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{player.eliminationPlace} место</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{player.prize || 0} ₽</div>
+                    </td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderAchievementsTab = () => (
+    <div className="p-6">
+      <h2 className="text-2xl font-bold mb-6">Достижения</h2>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold mb-2">Первый турнир</h3>
+          <p className="text-gray-600">Участие в первом турнире</p>
+          <div className="mt-4 w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center">
+            🏆
           </div>
-        )}
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold mb-2">Победитель</h3>
+          <p className="text-gray-600">Победа в турнире</p>
+          <div className="mt-4 w-16 h-16 bg-gold-100 rounded-full flex items-center justify-center">
+            👑
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
-        {activeTab === 'tournaments' && (
-          <div className="space-y-4">
-            {/* Зарегистрированные турниры */}
-            {registeredTournaments.length > 0 && (
-              <div className="card p-4">
-                <h3 className="font-display text-lg text-gold-300 mb-3 flex items-center gap-2">
-                  <Icon name="check" size={18} /> {t('registered')}
-                </h3>
-                <div className="flex flex-col gap-2">
-                  {registeredTournaments.map(tor => {
-                    const entry = tor.entries.find(e => e.playerId === player.id);
-                    return (
-                      <div key={tor.id} className="flex items-center gap-3 rounded-lg border border-line-soft bg-felt-900/50 px-3 py-2.5 text-xs">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-cream-100 truncate">{tor.name}</div>
-                          <div className="text-[10px] text-cream-500 num">{fmtDate(tor.date, s.settings.language)}</div>
-                        </div>
-                        <Badge tone="green">{t(`status.${tor.status}`)}</Badge>
-                        <Btn 
-                          size="sm" 
-                          variant="danger" 
-                          icon="x" 
-                          onClick={() => handleUnregister(tor.id)}
-                          disabled={tor.status === 'running'}
-                        >
-                          {t('cancel')}
-                        </Btn>
-                      </div>
-                    );
-                  })}
+  const renderTournamentDetail = () => {
+    if (!selectedTournament) return null;
+
+    const player = selectedTournament.players[currentUser?.id];
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-screen overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-2xl font-bold">{selectedTournament.name}</h2>
+              <button 
+                onClick={() => setSelectedTournament(null)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold">Описание</h3>
+                <p>{selectedTournament.description}</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h3 className="font-semibold">Дата старта</h3>
+                  <p>{formatTime(selectedTournament.startDate)}</p>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold">Статус</h3>
+                  <p>{selectedTournament.status}</p>
                 </div>
               </div>
-            )}
-
-            {/* Доступные для регистрации турниры */}
-            <div className="card p-4">
-              <h3 className="font-display text-lg text-gold-300 mb-3 flex items-center gap-2">
-                <Icon name="plus" size={18} /> Доступные турниры
-              </h3>
-              {availableTournaments.length === 0 ? (
-                <div className="text-sm text-cream-500 italic py-2">Нет доступных турниров</div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {availableTournaments.map(tor => (
-                    <div key={tor.id} className="flex items-center gap-3 rounded-lg border border-line-soft bg-felt-900/50 px-3 py-2.5 text-xs">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-cream-100 truncate">{tor.name}</div>
-                        <div className="text-[10px] text-cream-500 num">{fmtDate(tor.date, s.settings.language)}</div>
-                      </div>
-                      <Badge tone="info">{t(`status.${tor.status}`)}</Badge>
-                      <Btn 
-                        size="sm" 
-                        variant="gold" 
-                        icon="play" 
-                        onClick={() => handleRegister(tor.id)}
-                      >
-                        {t('register')}
-                      </Btn>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <h3 className="font-semibold">Стек</h3>
+                  <p>{selectedTournament.startingStack}</p>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold">Ребай</h3>
+                  <p>{selectedTournament.rebuyCost}</p>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold">Аддон</h3>
+                  <p>{selectedTournament.addonCost}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h3 className="font-semibold">Окончание регистрации</h3>
+                  <p>{formatTime(selectedTournament.registrationEnds)}</p>
+                </div>
+                
+                <div>
+                  <h3 className="font-semibold">Окончание докупов</h3>
+                  <p>{formatTime(selectedTournament.rebuyTimeEnds)}</p>
+                </div>
+              </div>
+              
+              {player && (
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold mb-2">Ваш статус</h3>
+                  
+                  {player.eliminated ? (
+                    <div>
+                      <p>Статус: Выбыл на {player.eliminationPlace} месте</p>
+                      {new Date() < selectedTournament.rebuyTimeEnds && (
+                        <button className="mt-2 bg-blue-500 text-white px-4 py-2 rounded">
+                          Ре-ентри (если доступно)
+                        </button>
+                      )}
                     </div>
-                  ))}
+                  ) : selectedTournament.status === 'inProgress' ? (
+                    <div>
+                      <p>Стек: {player.stack}</p>
+                      <p>Стол: {player.tableId}, Место: {player.seat}</p>
+                      <p>Ребай: {player.rebuys}, Аддон: {player.addons}</p>
+                      <p>До следующего уровня: {selectedTournament.nextBreakInMinutes} мин</p>
+                    </div>
+                  ) : (
+                    <p>Статус: Зарегистрирован</p>
+                  )}
                 </div>
               )}
             </div>
           </div>
-        )}
-
-        {activeTab === 'history' && (
-          <div className="card p-4">
-            <h3 className="font-display text-lg text-gold-300 mb-3">{t('player.history')}</h3>
-            {history.length === 0 ? (
-              <div className="text-sm text-cream-500 italic py-2">{t('noHistory')}</div>
-            ) : (
-              <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto pr-1">
-                {history.map(tor => {
-                  const entry = tor.entries.find(e => e.playerId === player.id);
-                  return (
-                    <div key={tor.id} className="flex items-center gap-2.5 rounded-lg border border-line-soft bg-felt-900/50 px-3 py-2 text-xs">
-                      <span className={`font-display text-base num w-8 ${
-                        entry?.place === 1 ? 'text-gold-300' :
-                        entry?.place === 2 ? 'text-[#dbe2e8]' :
-                        entry?.place === 3 ? 'text-[#e0a86b]' :
-                        'text-cream-500'
-                      }`}>
-                        {entry?.place || '—'}
-                      </span>
-                      <span className="flex-1 truncate font-semibold text-cream-100">{tor.name}</span>
-                      <span className="num text-cream-700">{fmtDate(tor.date, s.settings.language)}</span>
-                      <span className="num font-bold text-gold-300">+{entry?.points || 0}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'achievements' && (
-          <div className="card p-4">
-            <Achievements player={player} />
-          </div>
-        )}
-
-        <div className="mt-4 text-center text-xs text-cream-700">
-          {t('memberSince')} {fmtDate(player.joinedAt, s.settings.language)}
         </div>
-      </main>
-      <ToastHost />
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex">
+              <div className="flex space-x-8">
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className={`${
+                    activeTab === 'profile'
+                      ? 'border-indigo-500 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                >
+                  Профиль
+                </button>
+                
+                <button
+                  onClick={() => setActiveTab('tournaments')}
+                  className={`${
+                    activeTab === 'tournaments'
+                      ? 'border-indigo-500 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                >
+                  Турниры
+                </button>
+                
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`${
+                    activeTab === 'history'
+                      ? 'border-indigo-500 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                >
+                  История
+                </button>
+                
+                <button
+                  onClick={() => setActiveTab('achievements')}
+                  className={`${
+                    activeTab === 'achievements'
+                      ? 'border-indigo-500 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                >
+                  Достижения
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {activeTab === 'profile' && renderProfileTab()}
+      {activeTab === 'tournaments' && renderTournamentsTab()}
+      {activeTab === 'history' && renderHistoryTab()}
+      {activeTab === 'achievements' && renderAchievementsTab()}
+
+      {selectedTournament && renderTournamentDetail()}
     </div>
   );
-}
+};
+
+export default PlayerDashboard;
