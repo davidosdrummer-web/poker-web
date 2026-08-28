@@ -112,6 +112,29 @@ async function loadFromFirebase(): Promise<AppState> {
       }
     }
     
+    // Загружаем общие турниры клуба
+    const tournamentsRef = ref(db, 'tournaments');
+    const tournamentsSnapshot = await get(tournamentsRef);
+    if (tournamentsSnapshot.exists()) {
+      const tournamentsData = tournamentsSnapshot.val();
+      const clubTournaments: Tournament[] = [];
+      for (const tId in tournamentsData) {
+        const tor = tournamentsData[tId];
+        clubTournaments.push({
+          ...tor,
+          id: tId,
+        });
+      }
+      // Merge турниров с локальным списком
+      const existingIds = new Set(baseState.tournaments.map((t: Tournament) => t.id));
+      for (const ct of clubTournaments) {
+        if (!existingIds.has(ct.id)) {
+          baseState.tournaments.push(ct);
+          existingIds.add(ct.id);
+        }
+      }
+    }
+    
     // Для игроков с ролью 'player' также загружаем профиль из players_index
     const playerProfileRef = ref(db, `players_index/${userId}`);
     const playerSnapshot = await get(playerProfileRef);
@@ -306,6 +329,37 @@ function initFirebaseSync() {
   onValue(playerProfileRef, (snapshot) => {
     if (!snapshot.exists()) return;
     syncPlayerProfile();
+  });
+  
+  // Подписываемся на общие турниры клуба (для игроков и операторов)
+  const tournamentsRef = ref(db, 'tournaments');
+  onValue(tournamentsRef, (snapshot) => {
+    if (!snapshot.exists()) return;
+    const tournamentsData = snapshot.val();
+    const clubTournaments: Tournament[] = [];
+    for (const tId in tournamentsData) {
+      const tor = tournamentsData[tId];
+      clubTournaments.push({
+        ...tor,
+        id: tId,
+      });
+    }
+    // Синхронизируем турниры с локальным состоянием
+    commit((d) => {
+      const existingIds = new Set(d.tournaments.map((t: Tournament) => t.id));
+      for (const ct of clubTournaments) {
+        if (!existingIds.has(ct.id)) {
+          d.tournaments.push(ct);
+          existingIds.add(ct.id);
+        } else {
+          // Обновляем существующий турнир
+          const idx = d.tournaments.findIndex((t: Tournament) => t.id === ct.id);
+          if (idx >= 0) {
+            d.tournaments[idx] = ct;
+          }
+        }
+      }
+    });
   });
 }
 
