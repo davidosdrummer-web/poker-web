@@ -17,7 +17,7 @@ import type {
 } from './types';
 import { blindLevels, defaultBonuses, seedState } from './data';
 import { autoSeatPlan, balanceSuggestions, entryPoints, fmtChips, fmtInt, fullName, leaderboardRows, liveStats, uid, type AutoSeatMode, type Suggestion } from './utils';
-import { db, getUserId, ref, set, get, onValue, off } from './firebase';
+import { db, getUserId, ref, set, get, onValue, off, savePlayerToFirebase, updatePlayerInFirebase, deletePlayerFromFirebase, subscribeToPlayers } from './firebase';
 import { currentRole } from './auth';
 import { sendNotification } from './notifications';
 
@@ -54,6 +54,10 @@ function normalize(raw: AppState): AppState {
 let state: AppState = seedState();
 const listeners = new Set<() => void>();
 
+// Global players subscription for shared players list
+let allPlayers: Player[] = [];
+const playerListeners = new Set<(players: Player[]) => void>();
+
 function emit() {
   listeners.forEach((l) => l());
 }
@@ -61,6 +65,30 @@ function emit() {
 function subscribe(l: () => void): () => void {
   listeners.add(l);
   return () => listeners.delete(l);
+}
+
+// Initialize subscription to global players list from Firebase
+function initPlayersSubscription() {
+  const unsubscribe = subscribeToPlayers((snapshot) => {
+    let players: Player[] = [];
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      for (const id in data) {
+        players.push({ id, ...data[id] });
+      }
+    }
+    allPlayers = players; // Create a new array reference
+    // Emit event to trigger re-render when players change
+    emit();
+    playerListeners.forEach((l) => l(players));
+  });
+  return unsubscribe;
+}
+
+// Start the players subscription immediately
+let playersUnsubscribe: (() => void) | null = null;
+if (typeof window !== 'undefined') {
+  playersUnsubscribe = initPlayersSubscription();
 }
 
 async function loadFromFirebase(): Promise<AppState> {
@@ -153,7 +181,12 @@ export async function initStore() {
 }
 
 export function getState(): AppState {
-  return state;
+  // Use global players list from Firebase subscription instead of local state
+  const currentState = state;
+  if (allPlayers.length > 0) {
+    return { ...currentState, players: allPlayers };
+  }
+  return currentState;
 }
 
 export function useApp(): AppState {
@@ -345,43 +378,48 @@ export const actions = {
   addPlayer(data: { firstName: string; lastName: string; nickname: string; phone: string; avatarColor: string | null; avatarData?: string | null; joinedAt?: number; basePoints?: number; userId?: string | null; notes?: string }, allowSelfRegistration = false): string {
     const id = uid();
     if (!can('players') && !allowSelfRegistration) return id;
-    commit((d) => {
-      d.players.push({
-        id,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        nickname: data.nickname,
-        phone: data.phone,
-        avatarColor: data.avatarColor,
-        avatarData: data.avatarData ?? null,
-        joinedAt: data.joinedAt ?? Date.now(),
-        status: 'active',
-        basePoints: data.basePoints ?? 0,
-        userId: data.userId ?? null,
-        notes: data.notes ?? '',
-        knockouts: 0,
-        rebuyCount: 0,
-      });
-    });
+    
+    const newPlayer: Player = {
+      id,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      nickname: data.nickname,
+      phone: data.phone,
+      avatarColor: data.avatarColor,
+      avatarData: data.avatarData ?? null,
+      joinedAt: data.joinedAt ?? Date.now(),
+      status: 'active',
+      basePoints: data.basePoints ?? 0,
+      userId: data.userId ?? null,
+      notes: data.notes ?? '',
+      knockouts: 0,
+      rebuyCount: 0,
+    };
+    
+    // Save to global Firebase players list - this will trigger the subscription update
+    savePlayerToFirebase(newPlayer).catch(err => console.error('Failed to save player to Firebase:', err));
+    
+    // Don't add to local state - it will come from Firebase subscription
+    // Just return the id
     return id;
   },
   updatePlayer(id: string, patch: Partial<Pick<Player, 'firstName' | 'lastName' | 'nickname' | 'phone' | 'avatarColor' | 'avatarData' | 'joinedAt' | 'notes'>>) {
     if (!can('players')) return false;
-    return commit((d) => {
-      const p = d.players.find((x) => x.id === id);
-      if (p) Object.assign(p, patch);
-    });
+    // Update in Firebase - subscription will update local state
+    updatePlayerInFirebase(id, patch).catch(err => console.error('Failed to update player in Firebase:', err));
+    return true;
   },
   setPlayerStatus(id: string, status: PlayerStatus) {
     if (!can('players')) return false;
-    return commit((d) => {
-      const p = d.players.find((x) => x.id === id);
-      if (p) p.status = status;
-    });
+    // Update in Firebase - subscription will update local state
+    updatePlayerInFirebase(id, { status }).catch(err => console.error('Failed to update player status in Firebase:', err));
+    return true;
   },
   deletePlayer(id: string) {
     if (!can('players')) return false;
-    return commit((d) => { d.players = d.players.filter((x) => x.id !== id); });
+    // Delete from Firebase - subscription will update local state
+    deletePlayerFromFirebase(id).catch(err => console.error('Failed to delete player from Firebase:', err));
+    return true;
   },
 
   addSeason(name: string): string {

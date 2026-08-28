@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, onValue, off } from 'firebase/database';
+import { getDatabase, ref, set, get, onValue, off, push, update } from 'firebase/database';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import type { Player } from './types';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -48,6 +49,43 @@ export async function getUserRole(uid: string): Promise<string | null> {
 
 export async function setUserRole(uid: string, role: string) {
   await set(ref(db, `users/${uid}/role`), role);
+}
+
+// === Players Management in Firebase ===
+
+/** Save player to common players list in Firebase */
+export async function savePlayerToFirebase(player: Player): Promise<void> {
+  await set(ref(db, `players/${player.id}`), player);
+}
+
+/** Update player data in Firebase */
+export async function updatePlayerInFirebase(playerId: string, patch: Partial<Player>): Promise<void> {
+  await update(ref(db, `players/${playerId}`), patch);
+}
+
+/** Delete player from Firebase */
+export async function deletePlayerFromFirebase(playerId: string): Promise<void> {
+  await set(ref(db, `players/${playerId}`), null);
+}
+
+/** Get all players from Firebase */
+export async function getAllPlayersFromFirebase(): Promise<Player[]> {
+  const playersRef = ref(db, 'players');
+  const snapshot = await get(playersRef);
+  if (!snapshot.exists()) return [];
+  const data = snapshot.val();
+  const players: Player[] = [];
+  for (const id in data) {
+    players.push({ id, ...data[id] });
+  }
+  return players;
+}
+
+/** Subscribe to all players changes */
+export function subscribeToPlayers(callback: (snapshot: any) => void): () => void {
+  const playersRef = ref(db, 'players');
+  onValue(playersRef, callback);
+  return () => off(playersRef, 'value', callback);
 }
 
 export { ref, set, get, onValue, off };

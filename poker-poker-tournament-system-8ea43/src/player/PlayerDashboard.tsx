@@ -14,6 +14,7 @@ export function PlayerDashboard() {
   const t = makeT(s.settings.language);
   const user = useAuth();
   const [activeTab, setActiveTab] = useState<'rating' | 'history' | 'achievements'>('rating');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Находим игрока в базе клуба по userId
   const player = s.players.find(p => p.userId === user?.id);
@@ -24,6 +25,28 @@ export function PlayerDashboard() {
   const history = s.tournaments
     .filter(tor => tor.status === 'finished' && tor.entries.some(e => e.playerId === player?.id))
     .sort((a, b) => b.date - a.date);
+
+  // Ждем загрузки данных из Firebase и появления игрока в списке
+  useEffect(() => {
+    // Проверяем наличие игрока - без таймера, просто реагируем на изменения s.players
+    const foundPlayer = s.players.find(p => p.userId === user?.id);
+    
+    if (foundPlayer) {
+      setIsLoading(false);
+    }
+    // Если игрок не найден, остаемся в состоянии загрузки пока данные не обновятся через подписку Firebase
+  }, [s.players.length, user?.id]);
+
+  // Если данные еще загружаются
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-felt suit-pattern flex flex-col items-center justify-center p-4">
+        <Icon name="loading" size={64} className="text-gold-400 animate-spin" />
+        <h2 className="font-display text-3xl text-cream-100 mt-4">{t('loading')}</h2>
+        <p className="text-sm text-cream-500 mt-2">Загрузка профиля игрока...</p>
+      </div>
+    );
+  }
 
   // Если игрок не найден в базе клуба
   if (!player) {
