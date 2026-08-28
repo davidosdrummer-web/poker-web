@@ -28,14 +28,8 @@ export function RegisterPlayer() {
     }
 
     try {
-      const result = await auth.register(email, password, 'player', true);
-      if (!result.ok) {
-        setError(t(result.error));
-        setLoading(false);
-        return;
-      }
-
-      actions.addPlayer({
+      // Сначала создаем игрока в базе данных (до регистрации пользователя)
+      const tempPlayerId = actions.addPlayer({
         firstName,
         lastName,
         nickname: nickname || `${firstName} ${lastName}`,
@@ -43,14 +37,30 @@ export function RegisterPlayer() {
         avatarColor: null,
         joinedAt: Date.now(),
         basePoints: 0,
-        userId: result.user.id,
+        userId: null, // Пока null, обновим после регистрации
+        notes: '',
       }, true);
+
+      // Регистрируем пользователя в Firebase Auth
+      const result = await auth.register(email, password, 'player', true);
+      if (!result.ok) {
+        setError(t(result.error));
+        setLoading(false);
+        return;
+      }
+
+      // Обновляем игрока с userId после успешной регистрации
+      setTimeout(() => {
+        actions.updatePlayer(tempPlayerId, { userId: result.user.id });
+      }, 100);
 
       toast('Регистрация успешна!');
       setLoading(false);
       
-      // ✅ Просто перезагружаем страницу – это самое надёжное решение
-      window.location.reload();
+      // Даем время на синхронизацию с Firebase перед редиректом
+      setTimeout(() => {
+        window.location.href = '/#/player';
+      }, 500);
     } catch (err: any) {
       console.error('Ошибка регистрации:', err);
       setError(err.message || 'Ошибка регистрации');
