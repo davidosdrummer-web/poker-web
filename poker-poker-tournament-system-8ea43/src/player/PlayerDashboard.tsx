@@ -26,12 +26,24 @@ export function PlayerDashboard() {
     .filter(tor => tor.status === 'finished' && tor.entries.some(e => e.playerId === player?.id))
     .sort((a, b) => b.date - a.date);
 
-  // Ждем загрузки данных из Firebase
+  // Ждем загрузки данных из Firebase и появления игрока в списке
   useEffect(() => {
-    // Даем время на подписку Firebase (обычно достаточно 100-200мс)
-    const timer = setTimeout(() => setIsLoading(false), 200);
-    return () => clearTimeout(timer);
-  }, []);
+    // Проверяем наличие игрока каждые 200мс, максимум 10 секунд
+    let attempts = 0;
+    const maxAttempts = 50;
+    
+    const checkPlayer = setInterval(() => {
+      attempts++;
+      const foundPlayer = s.players.find(p => p.userId === user?.id);
+      
+      if (foundPlayer || attempts >= maxAttempts) {
+        clearInterval(checkPlayer);
+        setIsLoading(false);
+      }
+    }, 200);
+    
+    return () => clearInterval(checkPlayer);
+  }, [s.players.length, user?.id]);
 
   // Если данные еще загружаются
   if (isLoading) {
@@ -39,6 +51,7 @@ export function PlayerDashboard() {
       <div className="min-h-screen bg-felt suit-pattern flex flex-col items-center justify-center p-4">
         <Icon name="loading" size={64} className="text-gold-400 animate-spin" />
         <h2 className="font-display text-3xl text-cream-100 mt-4">{t('loading')}</h2>
+        <p className="text-sm text-cream-500 mt-2">Загрузка профиля игрока...</p>
       </div>
     );
   }

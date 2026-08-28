@@ -69,8 +69,15 @@ function subscribe(l: () => void): () => void {
 
 // Initialize subscription to global players list from Firebase
 function initPlayersSubscription() {
-  const unsubscribe = subscribeToPlayers((players) => {
-    allPlayers = players;
+  const unsubscribe = subscribeToPlayers((snapshot) => {
+    let players: Player[] = [];
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      for (const id in data) {
+        players.push({ id, ...data[id] });
+      }
+    }
+    allPlayers = players; // Create a new array reference
     // Emit event to trigger re-render when players change
     emit();
     playerListeners.forEach((l) => l(players));

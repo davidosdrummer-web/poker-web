@@ -82,21 +82,10 @@ export async function getAllPlayersFromFirebase(): Promise<Player[]> {
 }
 
 /** Subscribe to all players changes */
-export function subscribeToPlayers(callback: (players: Player[]) => void): () => void {
+export function subscribeToPlayers(callback: (snapshot: any) => void): () => void {
   const playersRef = ref(db, 'players');
-  onValue(playersRef, (snapshot) => {
-    if (!snapshot.exists()) {
-      callback([]);
-      return;
-    }
-    const data = snapshot.val();
-    const players: Player[] = [];
-    for (const id in data) {
-      players.push({ id, ...data[id] });
-    }
-    callback(players);
-  });
-  return () => off(playersRef);
+  onValue(playersRef, callback);
+  return () => off(playersRef, 'value', callback);
 }
 
 export { ref, set, get, onValue, off };
