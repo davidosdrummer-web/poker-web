@@ -31,9 +31,10 @@
       ".write": "auth != null"
     },
     "tournaments": {
-      // Читать турниры могут все авторизованные
+      // Читать турниры могут все авторизованные пользователи
       ".read": "auth != null",
-      ".write": "auth != null"
+      // Писать турниры могут только админы и операторы (роль 'admin' или 'operator')
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'operator')"
     }
   }
 }

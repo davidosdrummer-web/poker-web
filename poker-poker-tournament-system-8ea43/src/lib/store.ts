@@ -180,6 +180,7 @@ async function loadFromFirebase(): Promise<AppState> {
 }
 
 let persistTimeout: ReturnType<typeof setTimeout> | null = null;
+let tournamentsSyncEnabled = false;
 
 async function saveToFirebase() {
   const userId = getUserId();
@@ -190,6 +191,16 @@ async function saveToFirebase() {
       ...state,
       savedAt: Date.now()
     });
+    
+    // Синхронизируем турниры в общий раздел для игроков
+    if (can('structure') && state.tournaments.length > 0) {
+      const tournamentsRef = ref(db, 'tournaments');
+      const tournamentsData: Record<string, Tournament> = {};
+      state.tournaments.forEach((t) => {
+        tournamentsData[t.id] = t;
+      });
+      await set(tournamentsRef, tournamentsData);
+    }
   } catch (e) {
     console.warn('Failed to save to Firebase', e);
   }
