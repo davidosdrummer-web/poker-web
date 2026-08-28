@@ -43,8 +43,8 @@ export function PlayerDashboard() {
         <Icon name="users" size={64} className="text-gold-400 opacity-60" />
         <h2 className="font-display text-3xl text-cream-100 mt-4">{t('player.notFound')}</h2>
         <p className="text-sm text-cream-500 mt-2 text-center max-w-md">{t('player.linkAccount')}</p>
-        <Btn variant="gold" size="lg" icon="link" className="mt-6" onClick={() => window.location.href = '/'}>
-          {t('player.linkAccount')}
+        <Btn variant="gold" size="lg" icon="link" className="mt-6" onClick={() => window.location.reload()}>
+          Обновить страницу
         </Btn>
       </div>
     );

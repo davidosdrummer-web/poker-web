@@ -69,12 +69,52 @@ async function loadFromFirebase(): Promise<AppState> {
   try {
     const stateRef = ref(db, `users/${userId}/state`);
     const snapshot = await get(stateRef);
+    let baseState: AppState = seedState();
     if (snapshot.exists()) {
       const raw = snapshot.val();
       if (raw && raw.settings && Array.isArray(raw.players) && Array.isArray(raw.tournaments)) {
-        return normalize(raw);
+        baseState = normalize(raw);
       }
     }
+    
+    // Для игроков с ролью 'player' загружаем профиль из players_index
+    const playerProfileRef = ref(db, `players_index/${userId}`);
+    const playerSnapshot = await get(playerProfileRef);
+    if (playerSnapshot.exists()) {
+      const profile = playerSnapshot.val();
+      // Находим или создаем игрока в локальном списке
+      const existingPlayer = baseState.players.find(p => p.userId === userId);
+      if (!existingPlayer) {
+        // Добавляем игрока из профиля в список игроков
+        baseState.players.push({
+          id: uid(),
+          firstName: profile.firstName || '',
+          lastName: profile.lastName || '',
+          nickname: profile.nickname || '',
+          phone: profile.phone || '',
+          avatarColor: profile.avatarColor || null,
+          avatarData: null,
+          joinedAt: profile.joinedAt || Date.now(),
+          status: profile.status || 'active',
+          basePoints: 0,
+          userId: userId,
+          knockouts: 0,
+          rebuyCount: 0,
+          notes: '',
+        });
+      } else {
+        // Обновляем существующего игрока
+        existingPlayer.firstName = profile.firstName || existingPlayer.firstName;
+        existingPlayer.lastName = profile.lastName || existingPlayer.lastName;
+        existingPlayer.nickname = profile.nickname || existingPlayer.nickname;
+        existingPlayer.phone = profile.phone || existingPlayer.phone;
+        existingPlayer.avatarColor = profile.avatarColor ?? existingPlayer.avatarColor;
+        existingPlayer.joinedAt = profile.joinedAt || existingPlayer.joinedAt;
+        existingPlayer.status = profile.status || existingPlayer.status;
+      }
+    }
+    
+    return baseState;
   } catch (e) {
     console.warn('Failed to load from Firebase, using seed', e);
   }
