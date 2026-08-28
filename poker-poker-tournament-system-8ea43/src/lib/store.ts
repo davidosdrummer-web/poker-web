@@ -172,7 +172,12 @@ export async function initStore() {
 }
 
 export function getState(): AppState {
-  return state;
+  // Use global players list from Firebase subscription instead of local state
+  const currentState = state;
+  if (allPlayers.length > 0) {
+    return { ...currentState, players: allPlayers };
+  }
+  return currentState;
 }
 
 export function useApp(): AppState {
@@ -382,31 +387,30 @@ export const actions = {
       rebuyCount: 0,
     };
     
-    // Save to global Firebase players list
+    // Save to global Firebase players list - this will trigger the subscription update
     savePlayerToFirebase(newPlayer).catch(err => console.error('Failed to save player to Firebase:', err));
     
-    commit((d) => {
-      d.players.push(newPlayer);
-    });
+    // Don't add to local state - it will come from Firebase subscription
+    // Just return the id
     return id;
   },
   updatePlayer(id: string, patch: Partial<Pick<Player, 'firstName' | 'lastName' | 'nickname' | 'phone' | 'avatarColor' | 'avatarData' | 'joinedAt' | 'notes'>>) {
     if (!can('players')) return false;
-    return commit((d) => {
-      const p = d.players.find((x) => x.id === id);
-      if (p) Object.assign(p, patch);
-    });
+    // Update in Firebase - subscription will update local state
+    updatePlayerInFirebase(id, patch).catch(err => console.error('Failed to update player in Firebase:', err));
+    return true;
   },
   setPlayerStatus(id: string, status: PlayerStatus) {
     if (!can('players')) return false;
-    return commit((d) => {
-      const p = d.players.find((x) => x.id === id);
-      if (p) p.status = status;
-    });
+    // Update in Firebase - subscription will update local state
+    updatePlayerInFirebase(id, { status }).catch(err => console.error('Failed to update player status in Firebase:', err));
+    return true;
   },
   deletePlayer(id: string) {
     if (!can('players')) return false;
-    return commit((d) => { d.players = d.players.filter((x) => x.id !== id); });
+    // Delete from Firebase - subscription will update local state
+    deletePlayerFromFirebase(id).catch(err => console.error('Failed to delete player from Firebase:', err));
+    return true;
   },
 
   addSeason(name: string): string {
