@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { useApp } from '../lib/store';
+import { useApp, actions, can } from '../lib/store';
 import { makeT } from '../lib/i18n';
 import { fmtChips, fmtDate, fullName, leaderboardRows, rankMap } from '../lib/utils';
-import { Avatar, Badge, Btn, Icon, ToastHost } from '../components/ui';
+import { Avatar, Badge, Btn, Icon, ToastHost, toast } from '../components/ui';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { RatingChart } from '../components/RatingChart';
 import { Achievements } from '../components/Achievements';
 import { auth } from '../lib/auth';
+import type { Tournament } from '../lib/types';
 
 export function PlayerDashboard() {
   const s = useApp();
   const t = makeT(s.settings.language);
   const user = useAuth();
-  const [activeTab, setActiveTab] = useState<'rating' | 'history' | 'achievements'>('rating');
+  const [activeTab, setActiveTab] = useState<'rating' | 'history' | 'tournaments' | 'achievements'>('rating');
 
   // Находим игрока в базе клуба по userId
   const player = s.players.find(p => p.userId === user?.id);
@@ -24,6 +25,16 @@ export function PlayerDashboard() {
   const history = s.tournaments
     .filter(tor => tor.status === 'finished' && tor.entries.some(e => e.playerId === player?.id))
     .sort((a, b) => b.date - a.date);
+
+  // Доступные для регистрации турниры
+  const availableTournaments = s.tournaments
+    .filter(tor => (tor.status === 'scheduled' || tor.status === 'registration') && !tor.entries.some(e => e.playerId === player?.id))
+    .sort((a, b) => a.date - b.date);
+
+  // Зарегистрированные турниры
+  const registeredTournaments = s.tournaments
+    .filter(tor => (tor.status === 'scheduled' || tor.status === 'registration') && tor.entries.some(e => e.playerId === player?.id))
+    .sort((a, b) => a.date - b.date);
 
   // Если игрок не найден в базе клуба
   if (!player) {
@@ -42,6 +53,20 @@ export function PlayerDashboard() {
   // Выход
   const handleLogout = async () => {
     await auth.logout();
+  };
+
+  // Запись на турнир
+  const handleRegister = (tournamentId: string) => {
+    if (!player) return;
+    actions.toggleEntry(tournamentId, player.id);
+    toast(t('registered'));
+  };
+
+  // Отмена записи
+  const handleUnregister = (tournamentId: string) => {
+    if (!player) return;
+    actions.toggleEntry(tournamentId, player.id);
+    toast(t('unregistered'), 'warn');
   };
 
   return (
@@ -74,7 +99,7 @@ export function PlayerDashboard() {
       </header>
 
       {/* Основной контент */}
-      <main className="max-w-3xl mx-auto p-4">
+      <main className="max-w-4xl mx-auto p-4">
         {/* Краткая статистика */}
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="card p-4 text-center">
@@ -109,7 +134,7 @@ export function PlayerDashboard() {
 
         {/* Вкладки */}
         <div className="flex gap-1 bg-felt-900 border border-line rounded-lg p-1 mb-4">
-          {(['rating', 'history', 'achievements'] as const).map((tab) => (
+          {(['rating', 'tournaments', 'history', 'achievements'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -119,7 +144,7 @@ export function PlayerDashboard() {
                   : 'text-cream-500 hover:text-cream-100'
               }`}
             >
-              {tab === 'rating' ? t('player.rating') : tab === 'history' ? t('player.history') : t('achievements') || 'Достижения'}
+              {tab === 'rating' ? t('player.rating') : tab === 'tournaments' ? 'Турниры' : tab === 'history' ? t('player.history') : t('achievements') || 'Достижения'}
             </button>
           ))}
         </div>
@@ -128,6 +153,72 @@ export function PlayerDashboard() {
         {activeTab === 'rating' && (
           <div className="card p-4">
             <RatingChart playerId={player.id} height={300} />
+          </div>
+        )}
+
+        {activeTab === 'tournaments' && (
+          <div className="space-y-4">
+            {/* Зарегистрированные турниры */}
+            {registeredTournaments.length > 0 && (
+              <div className="card p-4">
+                <h3 className="font-display text-lg text-gold-300 mb-3 flex items-center gap-2">
+                  <Icon name="check" size={18} /> {t('registered')}
+                </h3>
+                <div className="flex flex-col gap-2">
+                  {registeredTournaments.map(tor => {
+                    const entry = tor.entries.find(e => e.playerId === player.id);
+                    return (
+                      <div key={tor.id} className="flex items-center gap-3 rounded-lg border border-line-soft bg-felt-900/50 px-3 py-2.5 text-xs">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-cream-100 truncate">{tor.name}</div>
+                          <div className="text-[10px] text-cream-500 num">{fmtDate(tor.date, s.settings.language)}</div>
+                        </div>
+                        <Badge tone="green">{t(`status.${tor.status}`)}</Badge>
+                        <Btn 
+                          size="sm" 
+                          variant="danger" 
+                          icon="x" 
+                          onClick={() => handleUnregister(tor.id)}
+                          disabled={tor.status === 'running'}
+                        >
+                          {t('cancel')}
+                        </Btn>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Доступные для регистрации турниры */}
+            <div className="card p-4">
+              <h3 className="font-display text-lg text-gold-300 mb-3 flex items-center gap-2">
+                <Icon name="plus" size={18} /> Доступные турниры
+              </h3>
+              {availableTournaments.length === 0 ? (
+                <div className="text-sm text-cream-500 italic py-2">Нет доступных турниров</div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {availableTournaments.map(tor => (
+                    <div key={tor.id} className="flex items-center gap-3 rounded-lg border border-line-soft bg-felt-900/50 px-3 py-2.5 text-xs">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-cream-100 truncate">{tor.name}</div>
+                        <div className="text-[10px] text-cream-500 num">{fmtDate(tor.date, s.settings.language)}</div>
+                      </div>
+                      <Badge tone="info">{t(`status.${tor.status}`)}</Badge>
+                      <Btn 
+                        size="sm" 
+                        variant="gold" 
+                        icon="play" 
+                        onClick={() => handleRegister(tor.id)}
+                      >
+                        {t('register')}
+                      </Btn>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

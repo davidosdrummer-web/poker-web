@@ -11,6 +11,7 @@ import {
   ref,
   onValue,
   set,
+  get,
 } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
@@ -34,7 +35,7 @@ async function updateCurrentUser(firebaseUser: User | null) {
   }
   currentFirebaseUser = firebaseUser;
   const uid = firebaseUser.uid;
-  const role = (await getUserRole(uid)) as Role || 'operator';
+  const role = (await getUserRole(uid)) as Role || 'player';
   const email = firebaseUser.email || 'user';
   const username = firebaseUser.displayName || email.split('@')[0] || 'user';
   currentUser = {
@@ -69,6 +70,7 @@ export function currentRole(): Role | null {
 
 export type AuthResult = { ok: true; user: UserAccount } | { ok: false; error: string };
 
+// Список всех пользователей системы (admin, operator)
 let allUsers: UserAccount[] = [];
 const userListeners = new Set<() => void>();
 
@@ -80,7 +82,7 @@ function loadAllUsers() {
       const users: UserAccount[] = [];
       for (const uid in data) {
         const u = data[uid];
-        if (u.role) {
+        if (u.role && (u.role === 'admin' || u.role === 'operator')) {
           users.push({
             id: uid,
             username: u.email || uid,
@@ -109,6 +111,48 @@ function subscribeUsers(callback: () => void): () => void {
 
 export function useAllUsers(): UserAccount[] {
   return useSyncExternalStore(subscribeUsers, getUsersSnapshot);
+}
+
+// Проверка существования игрока по userId
+export async function playerExists(userId: string): Promise<boolean> {
+  const snapshot = await get(ref(db, `players_index/${userId}`));
+  return snapshot.exists();
+}
+
+// Регистрация нового игрока в общем списке
+export async function registerPlayerProfile(data: {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  nickname: string;
+  phone: string;
+  avatarColor: string | null;
+  avatarData?: string | null;
+  joinedAt: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    // Проверяем, не существует ли уже
+    const exists = await playerExists(data.userId);
+    if (exists) {
+      return { ok: false, error: 'player.exists' };
+    }
+    
+    // Создаем запись в общем индексе игроков
+    await set(ref(db, `players_index/${data.userId}`), {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      nickname: data.nickname,
+      phone: data.phone,
+      avatarColor: data.avatarColor,
+      joinedAt: data.joinedAt,
+      status: 'active',
+    });
+    
+    return { ok: true };
+  } catch (err: any) {
+    console.error('Ошибка регистрации профиля игрока:', err);
+    return { ok: false, error: 'player.registerError' };
+  }
 }
 
 export const auth = {
@@ -206,6 +250,16 @@ export const auth = {
 
   async changePassword(current: UserAccount, oldPass: string, newPass: string): Promise<AuthResult> {
     return { ok: false, error: 'auth.notSupported' };
+  },
+  
+  async upgradeToOperator(userId: string, byAdmin: UserAccount): Promise<AuthResult> {
+    if (byAdmin.role !== 'admin') return { ok: false, error: 'auth.noRights' };
+    try {
+      await set(ref(db, `users/${userId}/role`), 'operator');
+      return { ok: true, user: { ...byAdmin } };
+    } catch (err: any) {
+      return { ok: false, error: 'auth.upgradeError' };
+    }
   },
 };
 

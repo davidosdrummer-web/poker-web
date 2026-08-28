@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Btn, Field, Icon, ToastHost, toast } from '../components/ui';
-import { auth } from '../lib/auth';
+import { auth, registerPlayerProfile } from '../lib/auth';
 import { actions } from '../lib/store';
 import { useApp } from '../lib/store';
 import { makeT } from '../lib/i18n';
@@ -28,6 +28,7 @@ export function RegisterPlayer() {
     }
 
     try {
+      // 1. Создаем учетную запись Firebase с ролью 'player'
       const result = await auth.register(email, password, 'player', true);
       if (!result.ok) {
         setError(t(result.error));
@@ -35,6 +36,24 @@ export function RegisterPlayer() {
         return;
       }
 
+      // 2. Регистрируем профиль игрока в общем списке клуба
+      const profileResult = await registerPlayerProfile({
+        userId: result.user.id,
+        firstName,
+        lastName,
+        nickname: nickname || `${firstName} ${lastName}`,
+        phone: phone || '',
+        avatarColor: null,
+        joinedAt: Date.now(),
+      });
+
+      if (!profileResult.ok) {
+        setError(t(profileResult.error));
+        setLoading(false);
+        return;
+      }
+
+      // 3. Добавляем игрока в локальное состояние приложения
       actions.addPlayer({
         firstName,
         lastName,
@@ -44,12 +63,13 @@ export function RegisterPlayer() {
         joinedAt: Date.now(),
         basePoints: 0,
         userId: result.user.id,
+        status: 'active',
       }, true);
 
-      toast('Регистрация успешна!');
+      toast('Регистрация успешна! Добро пожаловать!');
       setLoading(false);
       
-      // ✅ Просто перезагружаем страницу – это самое надёжное решение
+      // Перезагружаем страницу для обновления всех данных
       window.location.reload();
     } catch (err: any) {
       console.error('Ошибка регистрации:', err);
